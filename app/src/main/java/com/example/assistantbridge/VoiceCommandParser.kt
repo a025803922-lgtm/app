@@ -1,34 +1,29 @@
 package com.example.assistantbridge
 
 import android.content.Context
+import java.text.Normalizer
+import java.util.Locale
 
-enum class VoiceAction {
-    VOLUME_UP,
-    VOLUME_DOWN,
-    MUSIC_PLAY_PAUSE,
-    MUSIC_NEXT,
-    MUSIC_PREVIOUS,
-    OPEN_CHATGPT
-}
+enum class VoiceAction { VOLUME_UP, VOLUME_DOWN, MUSIC_PLAY_PAUSE, MUSIC_NEXT, MUSIC_PREVIOUS, OPEN_CHATGPT }
 
 object VoiceCommandParser {
+    private fun normalize(raw: String): String =
+        Normalizer.normalize(raw.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace("\\p{Mn}+".toRegex(), "")
+            .replace("[^\\p{L}\\p{N}]+".toRegex(), " ")
+            .trim()
+
     fun parse(raw: String): VoiceAction? {
-        val text = raw.lowercase().trim()
-        return when {
-            listOf("הגבר קול", "תגביר קול", "ווליום למעלה", "קול למעלה", "volume up", "increase volume", "louder")
-                .any { text.contains(it) } -> VoiceAction.VOLUME_UP
-            listOf("הנמך קול", "הנמיך קול", "ווליום למטה", "קול למטה", "volume down", "decrease volume", "quieter")
-                .any { text.contains(it) } -> VoiceAction.VOLUME_DOWN
-            listOf("השיר הבא", "שיר הבא", "הבא שיר", "next track", "next song")
-                .any { text.contains(it) } -> VoiceAction.MUSIC_NEXT
-            listOf("השיר הקודם", "שיר קודם", "הקודם", "previous track", "previous song")
-                .any { text.contains(it) } -> VoiceAction.MUSIC_PREVIOUS
-            listOf("נגן מוזיקה", "הפעל מוזיקה", "עצור מוזיקה", "השהה מוזיקה", "נגן", "השהה", "play pause", "play music", "pause music")
-                .any { text.contains(it) } -> VoiceAction.MUSIC_PLAY_PAUSE
-            listOf("פתח צ'אט ג'י פי טי", "פתח צ'אט גיפיטי", "פתח chatgpt", "open chatgpt")
-                .any { text.contains(it) } -> VoiceAction.OPEN_CHATGPT
-            else -> null
-        }
+        val text = normalize(raw)
+        val phrases = listOf(
+            VoiceAction.VOLUME_UP to listOf("הגבר קול", "תגביר קול", "ווליום למעלה", "קול למעלה", "תגביר את הווליום", "volume up", "increase volume", "turn it up", "louder"),
+            VoiceAction.VOLUME_DOWN to listOf("הנמך קול", "הנמיך קול", "ווליום למטה", "קול למטה", "תנמיך את הווליום", "volume down", "decrease volume", "turn it down", "quieter"),
+            VoiceAction.MUSIC_NEXT to listOf("השיר הבא", "שיר הבא", "הבא שיר", "תעביר שיר", "next track", "next song", "skip track"),
+            VoiceAction.MUSIC_PREVIOUS to listOf("השיר הקודם", "שיר קודם", "הקודם", "previous track", "previous song", "go back a song"),
+            VoiceAction.MUSIC_PLAY_PAUSE to listOf("נגן מוזיקה", "הפעל מוזיקה", "עצור מוזיקה", "השהה מוזיקה", "נגן", "השהה", "play pause", "play music", "pause music", "resume music", "stop music"),
+            VoiceAction.OPEN_CHATGPT to listOf("פתח צאט גי פי טי", "פתח צאט גיפיטי", "פתח chatgpt", "open chatgpt", "open chat gpt")
+        )
+        return phrases.firstOrNull { (_, alternatives) -> alternatives.any { text.contains(normalize(it)) } }?.first
     }
 
     fun execute(context: Context, action: VoiceAction) {
