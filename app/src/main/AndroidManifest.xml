@@ -1,9 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:allowBackup="false"
         android:label="Assistant Bridge"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".VoiceCommandActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
