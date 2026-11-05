@@ -1,0 +1,1 @@
+Temporary CI validation commit. The Android workflow should run unit tests and build the debug APK.
