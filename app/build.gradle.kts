@@ -5,6 +5,7 @@ plugins {
 android {
     namespace = "com.example.assistantbridge"
     compileSdk = 35
+    buildFeatures { buildConfig = true }
     defaultConfig {
         applicationId = "com.example.assistantbridge"
         minSdk = 23
