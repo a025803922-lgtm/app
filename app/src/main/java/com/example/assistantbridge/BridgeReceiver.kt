@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.view.KeyEvent
 
 class BridgeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -12,17 +13,17 @@ class BridgeReceiver : BroadcastReceiver() {
             Log.w("AssistantBridge", "Rejected command: invalid token")
             return
         }
-        when (intent.getStringExtra(BridgeActions.EXTRA_COMMAND)) {
-            "MUSIC_PLAY_PAUSE" -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-            "MUSIC_NEXT" -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_NEXT)
-            "MUSIC_PREVIOUS" -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-            "OPEN_APP" -> BridgeActions.openPackage(
+        when (BridgeCommand.parse(intent.getStringExtra(BridgeActions.EXTRA_COMMAND))) {
+            BridgeCommand.MUSIC_PLAY_PAUSE -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            BridgeCommand.MUSIC_NEXT -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+            BridgeCommand.MUSIC_PREVIOUS -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            BridgeCommand.OPEN_APP -> BridgeActions.openPackage(
                 context, intent.getStringExtra(BridgeActions.EXTRA_PACKAGE) ?: return
             )
-            "DIAL" -> BridgeActions.dial(
+            BridgeCommand.DIAL -> BridgeActions.dial(
                 context, intent.getStringExtra(BridgeActions.EXTRA_NUMBER) ?: return
             )
-            else -> Log.w("AssistantBridge", "Unknown command")
+            null -> Log.w("AssistantBridge", "Unknown command")
         }
     }
 }
