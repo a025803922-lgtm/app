@@ -17,8 +17,17 @@ class BridgeReceiver : BroadcastReceiver() {
             BridgeCommand.MUSIC_PLAY_PAUSE -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
             BridgeCommand.MUSIC_NEXT -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
             BridgeCommand.MUSIC_PREVIOUS -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            BridgeCommand.VOLUME_UP -> BridgeActions.adjustMusicVolume(context, true)
+            BridgeCommand.VOLUME_DOWN -> BridgeActions.adjustMusicVolume(context, false)
             BridgeCommand.OPEN_APP -> BridgeActions.openPackage(
                 context, intent.getStringExtra(BridgeActions.EXTRA_PACKAGE) ?: return
+            )
+            BridgeCommand.OPEN_CHATGPT -> BridgeActions.openChatGPT(context)
+            BridgeCommand.VOICE_COMMAND -> BridgeActions.startVoiceCommand(
+                context, VoiceCommandActivity.MODE_COMMAND
+            )
+            BridgeCommand.VOICE_TO_CHATGPT -> BridgeActions.startVoiceCommand(
+                context, VoiceCommandActivity.MODE_CHATGPT
             )
             BridgeCommand.DIAL -> BridgeActions.dial(
                 context, intent.getStringExtra(BridgeActions.EXTRA_NUMBER) ?: return
