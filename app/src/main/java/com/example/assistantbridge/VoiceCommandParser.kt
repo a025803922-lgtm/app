@@ -4,7 +4,10 @@ import android.content.Context
 import java.text.Normalizer
 import java.util.Locale
 
-enum class VoiceAction { VOLUME_UP, VOLUME_DOWN, MUSIC_PLAY_PAUSE, MUSIC_NEXT, MUSIC_PREVIOUS, OPEN_CHATGPT }
+enum class VoiceAction {
+    VOLUME_UP, VOLUME_DOWN, MUSIC_PLAY_PAUSE, MUSIC_NEXT, MUSIC_PREVIOUS,
+    OPEN_CHATGPT, OPEN_BLUETOOTH_PHONE
+}
 
 object VoiceCommandParser {
     private fun normalize(raw: String): String =
@@ -21,7 +24,8 @@ object VoiceCommandParser {
             VoiceAction.MUSIC_NEXT to listOf("השיר הבא", "שיר הבא", "הבא שיר", "תעביר שיר", "next track", "next song", "skip track"),
             VoiceAction.MUSIC_PREVIOUS to listOf("השיר הקודם", "שיר קודם", "הקודם", "previous track", "previous song", "go back a song"),
             VoiceAction.MUSIC_PLAY_PAUSE to listOf("נגן מוזיקה", "הפעל מוזיקה", "עצור מוזיקה", "השהה מוזיקה", "נגן", "השהה", "play pause", "play music", "pause music", "resume music", "stop music"),
-            VoiceAction.OPEN_CHATGPT to listOf("פתח צאט גי פי טי", "פתח צאט גיפיטי", "פתח chatgpt", "open chatgpt", "open chat gpt")
+            VoiceAction.OPEN_CHATGPT to listOf("פתח צאט גי פי טי", "פתח צאט גיפיטי", "פתח chatgpt", "open chatgpt", "open chat gpt"),
+            VoiceAction.OPEN_BLUETOOTH_PHONE to listOf("פתח טלפון בלוטות", "פתח בלוטות טלפון", "תפתח טלפון בלוטות", "פתח את הטלפון בלוטות", "open bluetooth phone", "open bluetooth dialer", "open bt phone")
         )
         return phrases.firstOrNull { (_, alternatives) -> alternatives.any { text.contains(normalize(it)) } }?.first
     }
@@ -34,6 +38,7 @@ object VoiceCommandParser {
             VoiceAction.MUSIC_NEXT -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_NEXT)
             VoiceAction.MUSIC_PREVIOUS -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS)
             VoiceAction.OPEN_CHATGPT -> BridgeActions.openChatGPT(context)
+            VoiceAction.OPEN_BLUETOOTH_PHONE -> BridgeActions.openBluetoothPhone(context)
         }
     }
 }
