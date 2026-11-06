@@ -39,6 +39,12 @@ class VoiceCommandParserTest {
         assertEquals(VoiceAction.OPEN_CHATGPT, VoiceCommandParser.parse("פתח chatgpt"))
     }
 
+    @Test fun parsesBluetoothPhoneCommandsInHebrewAndEnglish() {
+        assertEquals(VoiceAction.OPEN_BLUETOOTH_PHONE, VoiceCommandParser.parse("פתח טלפון בלוטות"))
+        assertEquals(VoiceAction.OPEN_BLUETOOTH_PHONE, VoiceCommandParser.parse("open bluetooth phone"))
+        assertEquals(VoiceAction.OPEN_BLUETOOTH_PHONE, VoiceCommandParser.parse("open bt phone"))
+    }
+
     @Test fun rejectsUnrecognizedSpeech() {
         assertNull(VoiceCommandParser.parse("שלום מה נשמע"))
     }
