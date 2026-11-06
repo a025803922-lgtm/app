@@ -16,6 +16,7 @@ object BridgeActions {
     const val EXTRA_TEXT = "text"
     const val SHARED_TOKEN = "CHANGE_THIS_TOKEN"
     const val CHATGPT_PACKAGE = "com.openai.chatgpt"
+    const val BLUETOOTH_PHONE_PACKAGE = "com.tw.bt"
 
     fun mediaKey(context: Context, keyCode: Int) {
         try {
@@ -55,6 +56,8 @@ object BridgeActions {
     }
 
     fun openChatGPT(context: Context) = openPackage(context, CHATGPT_PACKAGE)
+
+    fun openBluetoothPhone(context: Context) = openPackage(context, BLUETOOTH_PHONE_PACKAGE)
 
     fun sendTextToChatGPT(context: Context, text: String) {
         try {
