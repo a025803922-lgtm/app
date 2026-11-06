@@ -66,9 +66,12 @@ object BridgeActions {
         if (query.isBlank()) return emptyList()
         val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(query))
         val matches = mutableListOf<ContactMatch>()
+        val queries = linkedSetOf(query, query.removePrefix("ל").takeIf { query.startsWith("ל") && query.length > 1 }.orEmpty()).filter { it.isNotBlank() }
         try {
+            for (candidate in queries) {
+            val candidateUri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(candidate))
             context.contentResolver.query(
-                uri,
+                candidateUri,
                 arrayOf(
                     ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                     ContactsContract.CommonDataKinds.Phone.NUMBER
@@ -87,6 +90,7 @@ object BridgeActions {
                         }
                     }
                 }
+            }
             }
         } catch (e: Exception) {
             Log.e("AssistantBridge", "Contact lookup failed", e)
