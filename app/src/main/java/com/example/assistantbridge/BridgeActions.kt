@@ -4,8 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
+import android.provider.ContactsContract
 import android.util.Log
 import android.view.KeyEvent
+
+data class ContactMatch(val name: String, val number: String)
 
 object BridgeActions {
     const val ACTION_COMMAND = "com.example.assistantbridge.COMMAND"
@@ -16,6 +19,7 @@ object BridgeActions {
     const val EXTRA_TEXT = "text"
     const val SHARED_TOKEN = "CHANGE_THIS_TOKEN"
     const val CHATGPT_PACKAGE = "com.openai.chatgpt"
+    const val BLUETOOTH_PHONE_PACKAGE = "com.tw.bt"
 
     fun mediaKey(context: Context, keyCode: Int) {
         try {
@@ -56,6 +60,44 @@ object BridgeActions {
 
     fun openChatGPT(context: Context) = openPackage(context, CHATGPT_PACKAGE)
 
+    fun openBluetoothPhone(context: Context) = openPackage(context, BLUETOOTH_PHONE_PACKAGE)
+
+    fun findContacts(context: Context, query: String): List<ContactMatch> {
+        if (query.isBlank()) return emptyList()
+        val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(query))
+        val matches = mutableListOf<ContactMatch>()
+        val queries = linkedSetOf(query, query.removePrefix("ל").takeIf { query.startsWith("ל") && query.length > 1 }.orEmpty()).filter { it.isNotBlank() }
+        try {
+            for (candidate in queries) {
+            val candidateUri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(candidate))
+            context.contentResolver.query(
+                candidateUri,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null, null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC"
+            )?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (cursor.moveToNext()) {
+                    if (nameIndex >= 0 && numberIndex >= 0) {
+                        val name = cursor.getString(nameIndex).orEmpty()
+                        val number = cursor.getString(numberIndex).orEmpty()
+                        if (number.isNotBlank() && matches.none { it.number == number }) {
+                            matches.add(ContactMatch(name, number))
+                        }
+                    }
+                }
+            }
+            }
+        } catch (e: Exception) {
+            Log.e("AssistantBridge", "Contact lookup failed", e)
+        }
+        return matches
+    }
+
     fun sendTextToChatGPT(context: Context, text: String) {
         try {
             val share = Intent(Intent.ACTION_SEND).apply {
@@ -84,8 +126,21 @@ object BridgeActions {
     }
 
     fun dial(context: Context, number: String) {
-        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}"))
+        val uri = Uri.fromParts("tel", number, null)
+        val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri)
+            .setPackage(BLUETOOTH_PHONE_PACKAGE)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        val defaultIntent = Intent(Intent.ACTION_DIAL, uri)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            if (bluetoothIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(bluetoothIntent)
+            } else {
+                context.startActivity(defaultIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("AssistantBridge", "Could not open dialer", e)
+            openBluetoothPhone(context)
+        }
     }
 }
