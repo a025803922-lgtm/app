@@ -10,6 +10,17 @@
         </provider>
         <activity android:name=".VoiceCommandActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
+        <service
+            android:name=".ChatGptReadAloudService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/chatgpt_read_aloud_service" />
+        </service>
         <receiver android:name=".BridgeReceiver" android:exported="true"><intent-filter><action android:name="com.example.assistantbridge.COMMAND" /></intent-filter></receiver>
     </application>
 </manifest>
