@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chatgpt_read_aloud_description">Read new ChatGPT answers aloud through Android text-to-speech.</string>
+</resources>
