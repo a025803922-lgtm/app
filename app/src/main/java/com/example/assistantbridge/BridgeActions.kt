@@ -4,8 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
+import android.provider.ContactsContract
 import android.util.Log
 import android.view.KeyEvent
+
+data class ContactMatch(val name: String, val number: String)
 
 object BridgeActions {
     const val ACTION_COMMAND = "com.example.assistantbridge.COMMAND"
@@ -59,6 +62,38 @@ object BridgeActions {
 
     fun openBluetoothPhone(context: Context) = openPackage(context, BLUETOOTH_PHONE_PACKAGE)
 
+    fun findContacts(context: Context, query: String): List<ContactMatch> {
+        if (query.isBlank()) return emptyList()
+        val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(query))
+        val matches = mutableListOf<ContactMatch>()
+        try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null, null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC"
+            )?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (cursor.moveToNext()) {
+                    if (nameIndex >= 0 && numberIndex >= 0) {
+                        val name = cursor.getString(nameIndex).orEmpty()
+                        val number = cursor.getString(numberIndex).orEmpty()
+                        if (number.isNotBlank() && matches.none { it.number == number }) {
+                            matches.add(ContactMatch(name, number))
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("AssistantBridge", "Contact lookup failed", e)
+        }
+        return matches
+    }
+
     fun sendTextToChatGPT(context: Context, text: String) {
         try {
             val share = Intent(Intent.ACTION_SEND).apply {
@@ -87,8 +122,21 @@ object BridgeActions {
     }
 
     fun dial(context: Context, number: String) {
-        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}"))
+        val uri = Uri.fromParts("tel", number, null)
+        val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri)
+            .setPackage(BLUETOOTH_PHONE_PACKAGE)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        val defaultIntent = Intent(Intent.ACTION_DIAL, uri)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            if (bluetoothIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(bluetoothIntent)
+            } else {
+                context.startActivity(defaultIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("AssistantBridge", "Could not open dialer", e)
+            openBluetoothPhone(context)
+        }
     }
 }
