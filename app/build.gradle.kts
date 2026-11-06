@@ -10,8 +10,8 @@ android {
         applicationId = "com.example.assistantbridge"
         minSdk = 23
         targetSdk = 31
-        versionCode = 3
-        versionName = "0.3"
+        versionCode = 4
+        versionName = "0.4"
     }
     signingConfigs {
         create("release") {
