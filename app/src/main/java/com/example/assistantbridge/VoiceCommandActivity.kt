@@ -33,7 +33,7 @@ class VoiceCommandActivity : Activity() {
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_COMMAND
         tts = TextToSpeech(this) { result ->
             if (result == TextToSpeech.SUCCESS) {
-                val selected = if (languagePicker.selectedItemPosition == 2) Locale.US else Locale("he", "IL")
+                val selected = if (getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_LANGUAGE, 1) == 2) Locale.US else Locale("he", "IL")
                 val languageResult = tts?.setLanguage(selected)
                 if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     tts?.setLanguage(Locale.getDefault())
