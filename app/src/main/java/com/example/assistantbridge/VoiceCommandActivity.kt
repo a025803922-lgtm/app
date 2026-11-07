@@ -12,17 +12,14 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
 
 class VoiceCommandActivity : Activity() {
     private lateinit var status: TextView
-    private lateinit var languagePicker: Spinner
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var mode: String = MODE_COMMAND
@@ -33,8 +30,7 @@ class VoiceCommandActivity : Activity() {
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_COMMAND
         tts = TextToSpeech(this) { result ->
             if (result == TextToSpeech.SUCCESS) {
-                val selected = if (getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_LANGUAGE, 1) == 2) Locale.US else Locale("he", "IL")
-                val languageResult = tts?.setLanguage(selected)
+                val languageResult = tts?.setLanguage(Locale("he", "IL"))
                 if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     tts?.setLanguage(Locale.getDefault())
                 }
@@ -46,30 +42,18 @@ class VoiceCommandActivity : Activity() {
             setPadding(24, 24, 24, 24)
         }
         status = TextView(this).apply {
-            text = if (mode == MODE_CHATGPT) "Speak a question. ChatGPT will open with the recognized text; you may need to tap Send."
-                else "Choose a language, then speak a command. You can also say: call followed by a contact name."
+            text = if (mode == MODE_CHATGPT) {
+                "Speak your Hebrew question. The app will convert phonetic Hebrew to Hebrew text before opening ChatGPT."
+            } else {
+                "Say a command in Hebrew using English letters, for example: nagen muzika or titkasher la-bayit."
+            }
             textSize = 20f
             gravity = Gravity.CENTER
             setPadding(12, 24, 12, 24)
         }
         layout.addView(status)
-        languagePicker = Spinner(this).apply {
-            adapter = ArrayAdapter(this@VoiceCommandActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("Automatic (system)", "עברית", "English"))
-            setSelection(getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_LANGUAGE, 1))
-            onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt(KEY_LANGUAGE, position).apply()
-                    recognizer?.destroy()
-                    recognizer = null
-                    tts?.setLanguage(if (position == 2) Locale.US else Locale("he", "IL"))
-                }
-            }
-        }
-        layout.addView(languagePicker)
         layout.addView(Button(this).apply {
-            text = "Start listening"
+            text = "Start listening (English phonetic input)"
             setOnClickListener { startRecognition() }
         })
         layout.addView(Button(this).apply {
@@ -101,7 +85,7 @@ class VoiceCommandActivity : Activity() {
             }
             1 -> {
                 val match = matches.first()
-                status.text = "Opening phone for ${match.name}: ${match.number}"
+                status.text = "Opening Bluetooth phone for ${match.name}: ${match.number}"
                 speak("מחייג אל ${match.name}")
                 BridgeActions.dial(this, match.number)
             }
@@ -128,31 +112,20 @@ class VoiceCommandActivity : Activity() {
         }
         try {
             if (recognizer == null) {
-                val language = languagePicker.selectedItemPosition
-                recognizer = when (language) {
-                    1 -> {
-                        val service = ComponentName(VOICE_PACKAGE, VOICE_SERVICE)
-                        try {
-                            SpeechRecognizer.createSpeechRecognizer(this, service)
-                        } catch (_: Exception) {
-                            SpeechRecognizer.createSpeechRecognizer(this)
-                        }
-                    }
-                    else -> SpeechRecognizer.createSpeechRecognizer(this)
-                }.apply { setRecognitionListener(listener) }
+                recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                    setRecognitionListener(listener)
+                }
             }
-            val language = languagePicker.selectedItemPosition
             val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                when (language) {
-                    1 -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL")
-                    2 -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                    else -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                }
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             }
+            status.text = "Listening in phonetic-English mode…"
             recognizer?.startListening(request)
         } catch (e: Exception) {
             status.text = "Could not start voice recognition: ${e.message}"
@@ -167,7 +140,7 @@ class VoiceCommandActivity : Activity() {
         override fun onBufferReceived(buffer: ByteArray?) = Unit
         override fun onEndOfSpeech() { status.text = "Processing…" }
         override fun onError(error: Int) {
-            status.text = "Recognition error ($error). Check the selected voice service and microphone permission, then try again."
+            status.text = "Recognition error ($error). Check microphone permission and speech service, then try again."
             speak("לא שמעתי. נסה שוב")
         }
         override fun onResults(results: Bundle?) {
@@ -180,16 +153,22 @@ class VoiceCommandActivity : Activity() {
             }
             status.text = "Heard: $recognized"
             if (mode == MODE_CHATGPT) {
-                BridgeActions.sendTextToChatGPT(this@VoiceCommandActivity, recognized)
-                status.append("\nChatGPT opened with the recognized text. Tap Send if it is not sent automatically.")
-                speak("פתחתי את צ'אט ג'י פי טי עם השאלה. אם צריך, לחץ על שליחה")
+                val hebrewText = HebrewTransliterator.toHebrew(recognized)
+                BridgeActions.sendTextToChatGPT(this@VoiceCommandActivity, hebrewText)
+                status.append("\nChatGPT text: $hebrewText")
+                status.append("\nChatGPT opened with the converted text. Tap Send if it is not sent automatically.")
+                speak("פתחתי את צ'אט ג'י פי טי עם השאלה")
             } else {
-                val callTarget = alternatives.asSequence().mapNotNull { VoiceCommandParser.parseCallTarget(it) }.firstOrNull()
+                val callTarget = alternatives.asSequence()
+                    .mapNotNull { VoiceCommandParser.parseCallTarget(it) }
+                    .firstOrNull()
                 if (callTarget != null) {
                     handleContactCall(callTarget)
                     return
                 }
-                val command = alternatives.asSequence().mapNotNull { VoiceCommandParser.parse(it) }.firstOrNull()
+                val command = alternatives.asSequence()
+                    .mapNotNull { VoiceCommandParser.parse(it) }
+                    .firstOrNull()
                 if (command == null) {
                     status.append("\nCommand not recognized. Try a shorter phrase.")
                     speak("הפקודה לא זוהתה")
@@ -209,7 +188,8 @@ class VoiceCommandActivity : Activity() {
             }
         }
         override fun onPartialResults(partialResults: Bundle?) {
-            val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+            val alternatives = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+            val partial = alternatives.firstOrNull()
             if (!partial.isNullOrBlank()) status.text = "Hearing: $partial"
         }
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -242,9 +222,5 @@ class VoiceCommandActivity : Activity() {
         const val MODE_CHATGPT = "chatgpt"
         private const val REQUEST_AUDIO = 701
         private const val REQUEST_CONTACTS = 702
-        private const val VOICE_PACKAGE = "com.hebvoice.stt"
-        private const val VOICE_SERVICE = "com.hebvoice.stt.HebrewRecognitionService"
-        private const val PREFS = "assistant_bridge"
-        private const val KEY_LANGUAGE = "voice_language"
     }
 }
