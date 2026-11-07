@@ -21,7 +21,7 @@ object VoiceCommandParser {
         val text = normalize(raw)
         val patterns = listOf(
             "^(?:titkasher|titkash[e]?r|tiskasher|tikasher|hitkasher|call|dial)\\s+(?:el|le|la|l)?\\s*(.+)$",
-            "^(?:תתקשר|התקשר|חייג|תתקשרו|התקשרו)(?: אל| ל)? (.+)$"
+            "^(?:תתקשר|התקשר|חייג|תתקשרו|התקשרו)(?:\\\\s+(?:אל|ל))?\\\\s*(.+)$"
         )
         val target = patterns.asSequence()
             .mapNotNull { Regex(it).matchEntire(text)?.groupValues?.getOrNull(1) }
