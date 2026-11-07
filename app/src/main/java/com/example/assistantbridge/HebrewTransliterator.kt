@@ -13,7 +13,7 @@ object HebrewTransliterator {
         "atem" to "אתם", "hem" to "הם", "hen" to "הן", "ze" to "זה", "zeh" to "זה",
         "zot" to "זאת", "ele" to "אלה", "ma" to "מה", "lama" to "למה",
         "eifo" to "איפה", "eich" to "איך", "eikh" to "איך", "mi" to "מי",
-        "matai" to "מתי", "kama" to "כמה", "rotze" to "רוצה", "rotza" to "רוצה",
+        "matai" to "מתי", "kama" to "כמה", "rotze" to "רוצה", "rotza" to "רוצה", "ladaat" to "לדעת", "mezeg" to "מזג", "avir" to "אוויר", "haavir" to "האוויר",
         "tzarich" to "צריך", "tsarich" to "צריך", "tzricha" to "צריכה",
         "yesh" to "יש", "ein" to "אין", "im" to "אם", "ve" to "ו", "ha" to "ה",
         "et" to "את", "shel" to "של", "li" to "לי", "lanu" to "לנו",
@@ -25,7 +25,7 @@ object HebrewTransliterator {
         "erev" to "ערב", "hayom" to "היום", "machar" to "מחר",
         "achshav" to "עכשיו", "yesterday" to "אתמול", "me" to "מ",
         "bayit" to "בית", "bait" to "בית", "bayet" to "בית", "habayit" to "הבית",
-        "bayta" to "הביתה", "baitah" to "הביתה", "home" to "בית",
+        "bayta" to "הביתה", "baitah" to "הביתה", 
         "titkasher" to "תתקשר", "tiskasher" to "תתקשר", "tikasher" to "תתקשר",
         "hitkasher" to "התקשר", "nagen" to "נגן", "naghen" to "נגן",
         "muzika" to "מוזיקה", "music" to "מוזיקה", "atsor" to "עצור",
@@ -40,8 +40,9 @@ object HebrewTransliterator {
 
     fun toHebrew(input: String): String {
         if (input.any { it in '\u0590'..'\u05ff' }) return input
-        val tokens = Regex("[A-Za-z]+(?:'[A-Za-z]+)?|[^A-Za-z]+").findAll(input).map { it.value }.toList()
-        val latinWords = tokens.filter { it.any(Char::isLetter) }
+        val cleanedInput = input.replace(Regex("(?<=[A-Za-z])-(?=[A-Za-z])"), "")
+        val tokens = Regex("[A-Za-z]+(?:'[A-Za-z]+)?|[^A-Za-z]+").findAll(cleanedInput).map { it.value }.toList()
+        val latinWords = tokens.filter { token -> token.any { it.isLetter() } }
         if (latinWords.isEmpty()) return input
         val normalized = latinWords.map { it.lowercase(Locale.ROOT) }
         val looksHebrew = normalized.any { it in words } ||
@@ -49,7 +50,7 @@ object HebrewTransliterator {
         if (!looksHebrew) return input
 
         return tokens.joinToString("") { token ->
-            if (token.none(Char::isLetter)) token
+            if (token.none { it.isLetter() }) token
             else {
                 val lower = token.lowercase(Locale.ROOT)
                 words[lower] ?: transliterateWord(lower)
