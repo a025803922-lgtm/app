@@ -54,7 +54,7 @@ class VoiceCommandParserTest {
     @Test fun parsesCallContactTargetsInHebrewEnglishAndTransliteration() {
         assertEquals("home", VoiceCommandParser.parseCallTarget("call home"))
         assertEquals("david", VoiceCommandParser.parseCallTarget("Call David"))
-        assertEquals("לאמא", VoiceCommandParser.parseCallTarget("תתקשר לאמא"))
+        assertEquals("אמא", VoiceCommandParser.parseCallTarget("תתקשר לאמא"))
         assertEquals("דוד", VoiceCommandParser.parseCallTarget("התקשר אל דוד"))
         assertEquals("בית", VoiceCommandParser.parseCallTarget("titkasher la-bayit"))
         assertEquals("בית", VoiceCommandParser.parseCallTarget("titkasher l-bayit"))
