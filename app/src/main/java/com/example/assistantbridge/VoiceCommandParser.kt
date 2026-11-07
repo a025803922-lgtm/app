@@ -21,7 +21,7 @@ object VoiceCommandParser {
         val text = normalize(raw)
         val patterns = listOf(
             "^(?:titkasher|titkash[e]?r|tiskasher|tikasher|hitkasher|call|dial)\\s+(?:el|le|la|l)?\\s*(.+)$",
-            "^(?:תתקשר|התקשר|חייג|תתקשרו|התקשרו)(?:\\\\s+(?:אל|ל))?\\\\s*(.+)$"
+            "^(?:תתקשר|התקשר|חייג|תתקשרו|התקשרו)(?:\\s+(?:אל|ל))?\\s*(.+)$"
         )
         val target = patterns.asSequence()
             .mapNotNull { Regex(it).matchEntire(text)?.groupValues?.getOrNull(1) }
@@ -29,7 +29,8 @@ object VoiceCommandParser {
             ?.trim()
             ?.takeIf { it.isNotBlank() && it.length <= 80 }
             ?: return null
-        return HebrewTransliterator.toHebrew(target)
+        val isPhoneticHebrew = text.startsWith("titkasher ") || text.startsWith("tiskasher ") || text.startsWith("tikasher ") || text.startsWith("hitkasher ")
+        return if (isPhoneticHebrew) HebrewTransliterator.toHebrew(target) else target
     }
 
     fun parse(raw: String): VoiceAction? {
