@@ -1,5 +1,6 @@
 package com.example.assistantbridge
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
@@ -20,6 +21,7 @@ object BridgeActions {
     const val SHARED_TOKEN = "CHANGE_THIS_TOKEN"
     const val CHATGPT_PACKAGE = "com.openai.chatgpt"
     const val BLUETOOTH_PHONE_PACKAGE = "com.tw.bt"
+    const val BLUETOOTH_PHONE_ACTIVITY = "com.tw.bt.ATBluetoothActivity"
 
     fun mediaKey(context: Context, keyCode: Int) {
         try {
@@ -64,33 +66,36 @@ object BridgeActions {
 
     fun findContacts(context: Context, query: String): List<ContactMatch> {
         if (query.isBlank()) return emptyList()
-        val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(query))
         val matches = mutableListOf<ContactMatch>()
-        val queries = linkedSetOf(query, query.removePrefix("ל").takeIf { query.startsWith("ל") && query.length > 1 }.orEmpty()).filter { it.isNotBlank() }
+        val queries = linkedSetOf(query, query.removePrefix("ל").takeIf { query.startsWith("ל") && query.length > 1 }.orEmpty())
+            .filter { it.isNotBlank() }
         try {
             for (candidate in queries) {
-            val candidateUri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(candidate))
-            context.contentResolver.query(
-                candidateUri,
-                arrayOf(
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    ContactsContract.CommonDataKinds.Phone.NUMBER
-                ),
-                null, null,
-                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC"
-            )?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                while (cursor.moveToNext()) {
-                    if (nameIndex >= 0 && numberIndex >= 0) {
-                        val name = cursor.getString(nameIndex).orEmpty()
-                        val number = cursor.getString(numberIndex).orEmpty()
-                        if (number.isNotBlank() && matches.none { it.number == number }) {
-                            matches.add(ContactMatch(name, number))
+                val candidateUri = Uri.withAppendedPath(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI,
+                    Uri.encode(candidate)
+                )
+                context.contentResolver.query(
+                    candidateUri,
+                    arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER
+                    ),
+                    null, null,
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC"
+                )?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                    val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    while (cursor.moveToNext()) {
+                        if (nameIndex >= 0 && numberIndex >= 0) {
+                            val name = cursor.getString(nameIndex).orEmpty()
+                            val number = cursor.getString(numberIndex).orEmpty()
+                            if (number.isNotBlank() && matches.none { it.number == number }) {
+                                matches.add(ContactMatch(name, number))
+                            }
                         }
                     }
                 }
-            }
             }
         } catch (e: Exception) {
             Log.e("AssistantBridge", "Contact lookup failed", e)
@@ -127,19 +132,14 @@ object BridgeActions {
 
     fun dial(context: Context, number: String) {
         val uri = Uri.fromParts("tel", number, null)
-        val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri)
-            .setPackage(BLUETOOTH_PHONE_PACKAGE)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val defaultIntent = Intent(Intent.ACTION_DIAL, uri)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri).apply {
+            component = ComponentName(BLUETOOTH_PHONE_PACKAGE, BLUETOOTH_PHONE_ACTIVITY)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         try {
-            if (bluetoothIntent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(bluetoothIntent)
-            } else {
-                context.startActivity(defaultIntent)
-            }
+            context.startActivity(bluetoothIntent)
         } catch (e: Exception) {
-            Log.e("AssistantBridge", "Could not open dialer", e)
+            Log.e("AssistantBridge", "Could not open TS10 Bluetooth dialer; refusing to open Android dialer instead", e)
             openBluetoothPhone(context)
         }
     }
