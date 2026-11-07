@@ -9,7 +9,7 @@ import java.util.Locale
  */
 object HebrewTransliterator {
     private val words = mapOf(
-        "ani" to "אני", "anochi" to "אנוכי", "ata" to "אתה", "at" to "את",
+        "ani" to "אני", "anochi" to "אנוכי", "ata" to "אתה", 
         "atem" to "אתם", "hem" to "הם", "hen" to "הן", "ze" to "זה", "zeh" to "זה",
         "zot" to "זאת", "ele" to "אלה", "ma" to "מה", "lama" to "למה",
         "eifo" to "איפה", "eich" to "איך", "eikh" to "איך", "mi" to "מי",
@@ -23,19 +23,19 @@ object HebrewTransliterator {
         "bevakasha" to "בבקשה", "slיחה" to "סליחה", "slicha" to "סליחה",
         "shalom" to "שלום", "boker" to "בוקר", "layla" to "לילה",
         "erev" to "ערב", "hayom" to "היום", "machar" to "מחר",
-        "achshav" to "עכשיו", "yesterday" to "אתמול", "me" to "מ",
+        "achshav" to "עכשיו", 
         "bayit" to "בית", "bait" to "בית", "bayet" to "בית", "habayit" to "הבית",
         "bayta" to "הביתה", "baitah" to "הביתה", 
         "titkasher" to "תתקשר", "tiskasher" to "תתקשר", "tikasher" to "תתקשר",
         "hitkasher" to "התקשר", "nagen" to "נגן", "naghen" to "נגן",
-        "muzika" to "מוזיקה", "music" to "מוזיקה", "atsor" to "עצור",
+        "muzika" to "מוזיקה", "atsor" to "עצור",
         "atzor" to "עצור", "haashe" to "השהה", "tamshech" to "תמשיך",
         "hagdil" to "הגדל", "tagbir" to "תגביר", "hanemich" to "הנמיך",
         "hanmech" to "הנמך", "tamnich" to "תנמיך", "volyum" to "ווליום",
         "shir" to "שיר", "hashir" to "השיר", "haba" to "הבא", "maavar" to "מעבר",
         "maavir" to "מעביר", "kodem" to "קודם", "hakodem" to "הקודם",
         "ptach" to "פתח", "patach" to "פתח", "chatgpt" to "ChatGPT",
-        "new" to "ניו", "york" to "יורק", "israel" to "ישראל"
+        "david" to "דוד", "moshe" to "משה", "yossi" to "יוסי", "yaakov" to "יעקב", "avraham" to "אברהם", "yosef" to "יוסף", "shlomo" to "שלמה", "chaim" to "חיים", "noam" to "נועם", "daniel" to "דניאל", "sarah" to "שרה", "rachel" to "רחל"
     )
 
     fun toHebrew(input: String): String {
