@@ -39,6 +39,9 @@ class MainActivity : Activity() {
         }
         addTestButton(layout, "Open ChatGPT") { BridgeActions.openChatGPT(this) }
         addTestButton(layout, "Open Waze") { BridgeActions.openPackage(this, "com.waze") }
+        addTestButton(layout, "Open Bluetooth phonebook") { BridgeActions.openBluetoothPhonebook(this) }
+        addTestButton(layout, "Turn hotspot ON") { BridgeActions.setHotspot(this, true) }
+        addTestButton(layout, "Turn hotspot OFF") { BridgeActions.setHotspot(this, false) }
         updateStatus = TextView(this).apply {
             text = "Updates are checked against GitHub Releases."
             textSize = 14f
