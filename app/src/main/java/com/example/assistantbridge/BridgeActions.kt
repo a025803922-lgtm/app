@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
-import android.provider.ContactsContract
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
