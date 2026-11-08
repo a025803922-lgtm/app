@@ -31,7 +31,11 @@ class ChatGptReadAloudService : AccessibilityService() {
     private val hotspotTimeoutRunnable = Runnable {
         val pending = automationPrefs.getString(BridgeActions.KEY_PENDING_HOTSPOT, null)
         if (pending != null) {
-            automationPrefs.edit().remove(BridgeActions.KEY_PENDING_HOTSPOT).apply()
+            automationPrefs.edit()
+                .remove(BridgeActions.KEY_PENDING_HOTSPOT)
+                .remove(BridgeActions.KEY_HOTSPOT_STAGE)
+                .remove(BridgeActions.KEY_HOTSPOT_TOGGLE_SENT)
+                .apply()
             hotspotTimeoutScheduled = false
             speakNotice("לא הצלחתי לזהות את מתג הנקודה החמה. אפשר להפעיל או לכבות אותו ידנית בהגדרות.")
             Log.w(TAG, "Hotspot switch was not found; leaving Settings open for manual control")
@@ -201,33 +205,67 @@ class ChatGptReadAloudService : AccessibilityService() {
     private fun attemptHotspotToggle() {
         val requested = automationPrefs.getString(BridgeActions.KEY_PENDING_HOTSPOT, null) ?: return
         val root = rootInActiveWindow ?: return
-        val label = findNode(root) { isHotspotToggleLabel(it) } ?: return
-        val row = label.parent ?: label
-        val switchNode = findNode(row) {
-            it.isCheckable || it.className?.toString()?.contains("Switch", ignoreCase = true) == true
-        } ?: if (label.isCheckable) label else null
-
-        if (switchNode == null) {
-            Log.d(TAG, "Found hotspot label but could not read the switch state safely")
-            return
-        }
-
         val shouldBeEnabled = requested == "on"
-        if (switchNode.isChecked == shouldBeEnabled) {
-            completeHotspotAutomation("Hotspot already in requested state: $requested")
-            return
+
+        // First look for the real switch. Never tap it twice while waiting for
+        // Android to publish the changed checked state.
+        val label = findNode(root) { isHotspotToggleLabel(it) }
+        if (label != null) {
+            val row = label.parent ?: label
+            val switchNode = findNode(row) {
+                it.isCheckable || it.className?.toString()?.contains("Switch", ignoreCase = true) == true
+            } ?: if (label.isCheckable) label else null
+
+            if (switchNode != null) {
+                if (switchNode.isChecked == shouldBeEnabled) {
+                    completeHotspotAutomation("Hotspot verified in requested state: $requested")
+                    return
+                }
+                if (automationPrefs.getBoolean(BridgeActions.KEY_HOTSPOT_TOGGLE_SENT, false)) {
+                    Log.d(TAG, "Waiting for hotspot switch state to change; will not tap a second time")
+                    handler.removeCallbacks(hotspotRetryRunnable)
+                    handler.postDelayed(hotspotRetryRunnable, HOTSPOT_VERIFY_DELAY_MS)
+                    return
+                }
+                if (clickNodeOrAncestor(switchNode)) {
+                    automationPrefs.edit().putBoolean(BridgeActions.KEY_HOTSPOT_TOGGLE_SENT, true).apply()
+                    Log.i(TAG, "Tapped Wi-Fi hotspot switch once; waiting for state confirmation")
+                    handler.removeCallbacks(hotspotRetryRunnable)
+                    handler.postDelayed(hotspotRetryRunnable, HOTSPOT_VERIFY_DELAY_MS)
+                }
+                return
+            }
         }
 
-        if (clickNodeOrAncestor(switchNode)) {
-            Log.i(TAG, "Tapped Wi-Fi hotspot switch; waiting for state confirmation")
+        // Some TS10 Android builds open the parent page first. Navigate by
+        // accessible text instead of assuming a fixed screen coordinate.
+        val stage = automationPrefs.getInt(BridgeActions.KEY_HOTSPOT_STAGE, 0)
+        val nextEntry = if (stage == 0) {
+            findNode(root) { isHotspotSettingsEntry(it) }
+                ?: findNode(root) { isHotspotMenuEntry(it) }
+        } else {
+            findNode(root) { isHotspotMenuEntry(it) }
+        }
+
+        if (nextEntry != null && clickNodeOrAncestor(nextEntry)) {
+            automationPrefs.edit()
+                .putInt(BridgeActions.KEY_HOTSPOT_STAGE, if (stage == 0) 1 else 2)
+                .apply()
+            Log.i(TAG, "Opened hotspot settings navigation stage ${stage + 1}")
             handler.removeCallbacks(hotspotRetryRunnable)
             handler.postDelayed(hotspotRetryRunnable, HOTSPOT_VERIFY_DELAY_MS)
+            return
         }
+        Log.d(TAG, "Hotspot switch/menu not visible yet; waiting for next Settings accessibility event")
     }
 
     private fun completeHotspotAutomation(message: String) {
         Log.i(TAG, message)
-        automationPrefs.edit().remove(BridgeActions.KEY_PENDING_HOTSPOT).apply()
+        automationPrefs.edit()
+            .remove(BridgeActions.KEY_PENDING_HOTSPOT)
+            .remove(BridgeActions.KEY_HOTSPOT_STAGE)
+            .remove(BridgeActions.KEY_HOTSPOT_TOGGLE_SENT)
+            .apply()
         handler.removeCallbacks(hotspotTimeoutRunnable)
         handler.removeCallbacks(hotspotRetryRunnable)
         hotspotTimeoutScheduled = false
@@ -252,15 +290,32 @@ class ChatGptReadAloudService : AccessibilityService() {
         }
     }
 
+    private fun nodeLabel(node: AccessibilityNodeInfo): String =
+        listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
+            .joinToString(" ").trim().lowercase(Locale.ROOT)
+
+    private fun isHotspotSettingsEntry(node: AccessibilityNodeInfo): Boolean {
+        val value = nodeLabel(node)
+        return value.contains("hotspot & tethering") || value.contains("hotspot and tethering") ||
+            value.contains("נקודה חמה ושיתוף אינטרנט") ||
+            value.contains("שיתוף אינטרנט ונקודה חמה") ||
+            value.contains("נקודה חמה וקישור")
+    }
+
+    private fun isHotspotMenuEntry(node: AccessibilityNodeInfo): Boolean {
+        val value = nodeLabel(node)
+        return value == "hotspot" || value == "wi-fi hotspot" || value == "wifi hotspot" ||
+            value == "נקודה חמה" || value == "נקודת גישה אישית" ||
+            value == "נקודה חמה אלחוטית"
+    }
+
     private fun isHotspotToggleLabel(node: AccessibilityNodeInfo): Boolean {
-        val value = listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
-            .joinToString(" ").lowercase(Locale.ROOT)
-        if (value.isBlank()) return false
-        if (value.contains("hotspot & tethering") || value.contains("hotspot settings") ||
-            value.contains("נקודה חמה והגדרות") || value.contains("שיתוף אינטרנט והגדרות")) return false
+        val value = nodeLabel(node)
+        if (value.isBlank() || isHotspotSettingsEntry(node)) return false
         return value.contains("wi-fi hotspot") || value.contains("wifi hotspot") ||
             value == "hotspot" || value.contains("mobile hotspot") ||
-            value.contains("נקודה חמה") || value.contains("נקודת גישה אישית")
+            value == "נקודה חמה" || value.contains("נקודת גישה אישית") ||
+            value == "נקודה חמה אלחוטית"
     }
 
     private fun containsCallUiMarker(root: AccessibilityNodeInfo?): Boolean {
