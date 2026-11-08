@@ -62,6 +62,44 @@ object BridgeActions {
 
     fun openChatGPT(context: Context) = openPackage(context, CHATGPT_PACKAGE)
 
+    /** Opens an installed app by its visible launcher name. */
+    fun openAppByName(context: Context, requestedName: String): String {
+        val query = requestedName.trim().lowercase(java.util.Locale.ROOT)
+        if (query.isBlank()) return "Please say the app name."
+        return try {
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val apps = context.packageManager.queryIntentActivities(launcherIntent, 0)
+                .mapNotNull { info ->
+                    val label = info.loadLabel(context.packageManager)?.toString()?.trim().orEmpty()
+                    val packageName = info.activityInfo?.packageName.orEmpty()
+                    if (label.isBlank() || packageName == context.packageName) null
+                    else Triple(label, packageName, label.lowercase(java.util.Locale.ROOT))
+                }
+                .distinctBy { it.second }
+            val exact = apps.filter { it.third == query }
+            val matches = if (exact.isNotEmpty()) exact else apps.filter {
+                it.third.startsWith(query) || it.third.contains(query)
+            }
+            when (matches.size) {
+                0 -> "I couldn't find an installed app named $requestedName."
+                1 -> {
+                    val (label, packageName) = matches.first()
+                    val launch = context.packageManager.getLaunchIntentForPackage(packageName)
+                        ?: return "The app $label does not have a launcher activity."
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(launch)
+                    "Opened $label."
+                }
+                else -> "More than one app matches $requestedName: " +
+                    matches.take(4).joinToString(", ") { it.first } +
+                    ". Please say the full app name."
+            }
+        } catch (e: Exception) {
+            Log.e("AssistantBridge", "Could not open app by name: $requestedName", e)
+            "I couldn't open $requestedName."
+        }
+    }
+
     fun openBluetoothPhone(context: Context) = openPackage(context, BLUETOOTH_PHONE_PACKAGE)
 
     fun findContacts(context: Context, query: String): List<ContactMatch> {
