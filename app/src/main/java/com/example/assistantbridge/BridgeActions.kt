@@ -9,8 +9,6 @@ import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 
-data class ContactMatch(val name: String, val number: String)
-
 object BridgeActions {
     const val ACTION_COMMAND = "com.example.assistantbridge.COMMAND"
     const val EXTRA_TOKEN = "token"
@@ -144,44 +142,6 @@ object BridgeActions {
         }
     }
 
-    fun findContacts(context: Context, query: String): List<ContactMatch> {
-        if (query.isBlank()) return emptyList()
-        val matches = mutableListOf<ContactMatch>()
-        val queries = linkedSetOf(query, query.removePrefix("ל").takeIf { query.startsWith("ל") && query.length > 1 }.orEmpty())
-            .filter { it.isNotBlank() }
-        try {
-            for (candidate in queries) {
-                val candidateUri = Uri.withAppendedPath(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI,
-                    Uri.encode(candidate)
-                )
-                context.contentResolver.query(
-                    candidateUri,
-                    arrayOf(
-                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                        ContactsContract.CommonDataKinds.Phone.NUMBER
-                    ),
-                    null, null,
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC"
-                )?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                    val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                    while (cursor.moveToNext()) {
-                        if (nameIndex >= 0 && numberIndex >= 0) {
-                            val name = cursor.getString(nameIndex).orEmpty()
-                            val number = cursor.getString(numberIndex).orEmpty()
-                            if (number.isNotBlank() && matches.none { it.number == number }) {
-                                matches.add(ContactMatch(name, number))
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("AssistantBridge", "Contact lookup failed", e)
-        }
-        return matches
-    }
 
     fun sendTextToChatGPT(context: Context, text: String) {
         try {
