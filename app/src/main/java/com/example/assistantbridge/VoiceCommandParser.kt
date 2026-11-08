@@ -6,7 +6,7 @@ import java.util.Locale
 
 enum class VoiceAction {
     VOLUME_UP, VOLUME_DOWN, MUSIC_PLAY_PAUSE, MUSIC_NEXT, MUSIC_PREVIOUS,
-    OPEN_CHATGPT, OPEN_BLUETOOTH_PHONE
+    OPEN_CHATGPT, OPEN_BLUETOOTH_PHONE, HOTSPOT_ON, HOTSPOT_OFF
 }
 
 object VoiceCommandParser {
@@ -90,6 +90,16 @@ object VoiceCommandParser {
                 "פתח צאט גי פי טי", "פתח צאט גיפיטי", "פתח chatgpt", "open chatgpt",
                 "open chat gpt", "ptach chatgpt", "patach chatgpt"
             ),
+            VoiceAction.HOTSPOT_ON to listOf(
+                "turn on hotspot", "enable hotspot", "hotspot on", "activate hotspot",
+                "הפעל נקודה חמה", "תפעיל נקודה חמה", "תדליק נקודה חמה", "הדלק נקודה חמה",
+                "hadlek nekuda chama", "tadlik nekuda chama", "hafel nekuda chama"
+            ),
+            VoiceAction.HOTSPOT_OFF to listOf(
+                "turn off hotspot", "disable hotspot", "hotspot off", "deactivate hotspot",
+                "כבה נקודה חמה", "תכבה נקודה חמה", "תכבה את הנקודה החמה", "כבה את הנקודה החמה",
+                "kabe nekuda chama", "kabeh nekuda chama", "tichbe nekuda chama"
+            ),
             VoiceAction.OPEN_BLUETOOTH_PHONE to listOf(
                 "פתח טלפון בלוטות", "פתח בלוטות טלפון", "תפתח טלפון בלוטות",
                 "פתח את הטלפון בלוטות", "open bluetooth phone", "open bluetooth dialer",
@@ -113,7 +123,9 @@ object VoiceCommandParser {
             VoiceAction.MUSIC_NEXT -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_NEXT)
             VoiceAction.MUSIC_PREVIOUS -> BridgeActions.mediaKey(context, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS)
             VoiceAction.OPEN_CHATGPT -> BridgeActions.openChatGPT(context)
-            VoiceAction.OPEN_BLUETOOTH_PHONE -> BridgeActions.openBluetoothPhone(context)
+            VoiceAction.OPEN_BLUETOOTH_PHONE -> BridgeActions.openBluetoothPhonebook(context)
+            VoiceAction.HOTSPOT_ON -> BridgeActions.setHotspot(context, true)
+            VoiceAction.HOTSPOT_OFF -> BridgeActions.setHotspot(context, false)
         }
     }
 }
