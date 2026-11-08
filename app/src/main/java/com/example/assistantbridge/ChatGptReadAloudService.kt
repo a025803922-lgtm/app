@@ -345,7 +345,7 @@ class ChatGptReadAloudService : AccessibilityService() {
         if (speechText.isBlank()) return
         lastSpoken = answer
 
-        val locale = if (speechText.any { it in '\\u0590'..'\\u05ff' }) Locale("he", "IL") else Locale.US
+        val locale = if (speechText.any { it in '\u0590'..'\u05ff' }) Locale("he", "IL") else Locale.US
         val languageStatus = tts?.setLanguage(locale)
         if (languageStatus != null && languageStatus < TextToSpeech.LANG_AVAILABLE) {
             tts?.setLanguage(Locale.getDefault())
