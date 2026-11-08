@@ -44,8 +44,9 @@ class ChatGptReadAloudService : AccessibilityService() {
     private val callReturnRunnable = Runnable {
         val root = rootInActiveWindow
         val activePackage = root?.packageName?.toString()
-        if (callUiSeen && activePackage == BLUETOOTH_PACKAGE && !containsCallUiMarker(root)) {
-            Log.i(TAG, "Bluetooth call UI disappeared; returning to $returnPackage")
+        if (callUiSeen && activePackage != null && !isCallUiPackage(activePackage) &&
+            !containsCallUiMarker(root)) {
+            Log.i(TAG, "Call UI disappeared; returning to $returnPackage")
             callUiSeen = false
             restorePreviousApp()
         }
@@ -128,14 +129,17 @@ class ChatGptReadAloudService : AccessibilityService() {
 
         if (isCallUiPackage(packageName)) {
             val root = rootInActiveWindow
-            if (containsCallUiMarker(root)) callUiSeen = true
+            if (containsCallUiMarker(root)) {
+                if (returnPackage == null) returnPackage = lastForegroundPackage
+                callUiSeen = true
+            }
             return
         }
 
-        if (callUiSeen && packageName == returnPackage) {
-            // The system already returned to the previous app; do not launch it again.
-            callUiSeen = false
-            returnPackage = null
+        if (callUiSeen && !callReturnScheduled) {
+            callReturnScheduled = true
+            handler.removeCallbacks(callReturnRunnable)
+            handler.postDelayed(callReturnRunnable, CALL_RETURN_DELAY_MS)
         }
     }
 
