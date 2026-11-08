@@ -33,6 +33,26 @@ object VoiceCommandParser {
         return if (isPhoneticHebrew) HebrewTransliterator.toHebrew(target) else target
     }
 
+    fun parseOpenAppTarget(raw: String): String? {
+        val text = normalize(raw)
+        val patterns = listOf(
+            "^(?:open|launch|start)\\s+(.+)$",
+            "^(?:פתח|תפתח|תפעיל|הפעל)\\s+(?:את\\s+)?(.+)$"
+        )
+        return patterns.asSequence()
+            .mapNotNull { Regex(it).matchEntire(text)?.groupValues?.getOrNull(1) }
+            .firstOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it.length <= 50 }
+            ?.let { target ->
+                when (target) {
+                    "bluetooth phone", "bt phone", "bluetooth dialer", "טלפון בלוטות", "בלוטות טלפון" ->
+                        "Bluetooth Phone"
+                    else -> target
+                }
+            }
+    }
+
     fun parse(raw: String): VoiceAction? {
         val text = normalize(raw)
         val aliases = listOf(
@@ -62,8 +82,9 @@ object VoiceCommandParser {
                 "נגן מוזיקה", "הפעל מוזיקה", "עצור מוזיקה", "השהה מוזיקה", "נגן",
                 "השהה", "תמשיך לנגן", "play pause", "play music", "pause music",
                 "resume music", "stop music", "nagen music", "nagen muzika", "nagen",
+                "nagen et hamuzika", "nagen hamuzika", "play muzika",
                 "atsor muzika", "atzor muzika", "haashe muzika", "hamshich muzika",
-                "tamshech muzika", "tamshech et hamuzika"
+                "tamshech muzika", "tamshech et hamuzika", "tashmia muzika"
             ),
             VoiceAction.OPEN_CHATGPT to listOf(
                 "פתח צאט גי פי טי", "פתח צאט גיפיטי", "פתח chatgpt", "open chatgpt",
