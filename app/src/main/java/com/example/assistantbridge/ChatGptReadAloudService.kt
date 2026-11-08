@@ -294,19 +294,31 @@ class ChatGptReadAloudService : AccessibilityService() {
         listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
             .joinToString(" ").trim().lowercase(Locale.ROOT)
 
+    private fun hasClickableAncestor(node: AccessibilityNodeInfo): Boolean {
+        var current: AccessibilityNodeInfo? = node
+        repeat(6) {
+            if (current == null) return false
+            if (current!!.isClickable) return true
+            current = current!!.parent
+        }
+        return false
+    }
+
     private fun isHotspotSettingsEntry(node: AccessibilityNodeInfo): Boolean {
         val value = nodeLabel(node)
-        return value.contains("hotspot & tethering") || value.contains("hotspot and tethering") ||
+        val matches = value.contains("hotspot & tethering") || value.contains("hotspot and tethering") ||
             value.contains("נקודה חמה ושיתוף אינטרנט") ||
             value.contains("שיתוף אינטרנט ונקודה חמה") ||
             value.contains("נקודה חמה וקישור")
+        return matches && hasClickableAncestor(node)
     }
 
     private fun isHotspotMenuEntry(node: AccessibilityNodeInfo): Boolean {
         val value = nodeLabel(node)
-        return value == "hotspot" || value == "wi-fi hotspot" || value == "wifi hotspot" ||
+        val matches = value == "hotspot" || value == "wi-fi hotspot" || value == "wifi hotspot" ||
             value == "נקודה חמה" || value == "נקודת גישה אישית" ||
             value == "נקודה חמה אלחוטית"
+        return matches && hasClickableAncestor(node)
     }
 
     private fun isHotspotToggleLabel(node: AccessibilityNodeInfo): Boolean {
