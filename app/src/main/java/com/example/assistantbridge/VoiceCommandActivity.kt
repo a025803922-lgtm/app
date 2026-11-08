@@ -43,7 +43,7 @@ class VoiceCommandActivity : Activity() {
         }
         status = TextView(this).apply {
             text = if (mode == MODE_CHATGPT) {
-                "Speak your Hebrew question. The app will convert phonetic Hebrew to Hebrew text before opening ChatGPT."
+                "Speak your question in normal Hebrew. The Hebrew Voice recognition service will send Hebrew text directly to ChatGPT."
             } else {
                 "Say a command in Hebrew using English letters, for example: nagen muzika or titkasher la-bayit."
             }
@@ -53,7 +53,7 @@ class VoiceCommandActivity : Activity() {
         }
         layout.addView(status)
         layout.addView(Button(this).apply {
-            text = "Start listening (English phonetic input)"
+            text = if (mode == MODE_CHATGPT) "Start listening (Hebrew)" else "Start listening (voice commands)"
             setOnClickListener { startRecognition() }
         })
         layout.addView(Button(this).apply {
@@ -112,20 +112,30 @@ class VoiceCommandActivity : Activity() {
         }
         try {
             if (recognizer == null) {
-                recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                    setRecognitionListener(listener)
-                }
+                recognizer = if (mode == MODE_CHATGPT) {
+                    try {
+                        SpeechRecognizer.createSpeechRecognizer(
+                            this,
+                            ComponentName(VOICE_PACKAGE, VOICE_SERVICE)
+                        )
+                    } catch (_: Exception) {
+                        SpeechRecognizer.createSpeechRecognizer(this)
+                    }
+                } else {
+                    SpeechRecognizer.createSpeechRecognizer(this)
+                }.apply { setRecognitionListener(listener) }
             }
             val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                val language = if (mode == MODE_CHATGPT) "he-IL" else "en-US"
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
                 putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             }
-            status.text = "Listening in phonetic-English mode…"
+            status.text = if (mode == MODE_CHATGPT) "Listening in Hebrew…" else "Listening for voice commands…"
             recognizer?.startListening(request)
         } catch (e: Exception) {
             status.text = "Could not start voice recognition: ${e.message}"
@@ -153,10 +163,10 @@ class VoiceCommandActivity : Activity() {
             }
             status.text = "Heard: $recognized"
             if (mode == MODE_CHATGPT) {
-                val hebrewText = HebrewTransliterator.toHebrew(recognized)
-                BridgeActions.sendTextToChatGPT(this@VoiceCommandActivity, hebrewText)
-                status.append("\nChatGPT text: $hebrewText")
-                status.append("\nChatGPT opened with the converted text. Tap Send if it is not sent automatically.")
+                // Hebrew Voice returns Hebrew text directly; do not transliterate it.
+                BridgeActions.sendTextToChatGPT(this@VoiceCommandActivity, recognized)
+                status.append("\nHebrew text sent to ChatGPT: $recognized")
+                status.append("\nChatGPT opened with the recognized text. Tap Send if it is not sent automatically.")
                 speak("פתחתי את צ'אט ג'י פי טי עם השאלה")
             } else {
                 val callTarget = alternatives.asSequence()
@@ -164,6 +174,15 @@ class VoiceCommandActivity : Activity() {
                     .firstOrNull()
                 if (callTarget != null) {
                     handleContactCall(callTarget)
+                    return
+                }
+                val appTarget = alternatives.asSequence()
+                    .mapNotNull { VoiceCommandParser.parseOpenAppTarget(it) }
+                    .firstOrNull()
+                if (appTarget != null) {
+                    val result = BridgeActions.openAppByName(this@VoiceCommandActivity, appTarget)
+                    status.append("\n$result")
+                    speak(if (result.startsWith("Opened")) "פותח את $appTarget" else "לא מצאתי את האפליקציה")
                     return
                 }
                 val command = alternatives.asSequence()
@@ -222,5 +241,7 @@ class VoiceCommandActivity : Activity() {
         const val MODE_CHATGPT = "chatgpt"
         private const val REQUEST_AUDIO = 701
         private const val REQUEST_CONTACTS = 702
+        private const val VOICE_PACKAGE = "com.hebvoice.stt"
+        private const val VOICE_SERVICE = "com.hebvoice.stt.HebrewRecognitionService"
     }
 }
