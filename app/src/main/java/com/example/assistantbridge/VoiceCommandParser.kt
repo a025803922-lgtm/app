@@ -103,7 +103,8 @@ object VoiceCommandParser {
             VoiceAction.OPEN_BLUETOOTH_PHONE to listOf(
                 "פתח טלפון בלוטות", "פתח בלוטות טלפון", "תפתח טלפון בלוטות",
                 "פתח את הטלפון בלוטות", "open bluetooth phone", "open bluetooth dialer",
-                "open bt phone"
+                "open bt phone", "open phonebook", "open phone book", "phone book",
+                "פתח ספר טלפונים", "פתח את ספר הטלפונים", "ספר טלפונים"
             )
         )
         return aliases.firstOrNull { (_, phrases) ->
