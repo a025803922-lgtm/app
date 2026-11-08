@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
@@ -50,7 +51,7 @@ class MainActivity : Activity() {
         }
         layout.addView(updateStatus)
         addTestButton(layout, "Check for updates") { UpdateManager.check(this) { updateStatus.text = it } }
-        setContentView(layout)
+        setContentView(ScrollView(this).apply { addView(layout) })
     }
 
     private fun addTestButton(parent: LinearLayout, label: String, action: () -> Unit) {
