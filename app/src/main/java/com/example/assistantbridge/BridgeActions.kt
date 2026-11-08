@@ -24,6 +24,8 @@ object BridgeActions {
     const val KEY_PENDING_PHONEBOOK = "pending_phonebook"
     const val KEY_PHONE_TARGET = "phone_target"
     const val KEY_PENDING_HOTSPOT = "pending_hotspot"
+    const val KEY_HOTSPOT_STAGE = "hotspot_stage"
+    const val KEY_HOTSPOT_TOGGLE_SENT = "hotspot_toggle_sent"
 
     fun mediaKey(context: Context, keyCode: Int) {
         try {
@@ -124,6 +126,8 @@ object BridgeActions {
     fun setHotspot(context: Context, enabled: Boolean) {
         context.getSharedPreferences(AUTOMATION_PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_PENDING_HOTSPOT, if (enabled) "on" else "off")
+            .putInt(KEY_HOTSPOT_STAGE, 0)
+            .putBoolean(KEY_HOTSPOT_TOGGLE_SENT, false)
             .apply()
         val tetherSettings = Intent("android.settings.TETHER_SETTINGS")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
