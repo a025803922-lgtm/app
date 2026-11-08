@@ -2,7 +2,6 @@ package com.example.assistantbridge
 
 import android.Manifest
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -23,7 +22,6 @@ class VoiceCommandActivity : Activity() {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var mode: String = MODE_COMMAND
-    private var pendingContactTarget: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,38 +69,9 @@ class VoiceCommandActivity : Activity() {
     }
 
     private fun handleContactCall(target: String) {
-        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            pendingContactTarget = target
-            requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), REQUEST_CONTACTS)
-            status.text = "Allow contacts access to find $target."
-            return
-        }
-        val matches = BridgeActions.findContacts(this, target)
-        when (matches.size) {
-            0 -> {
-                status.text = "No phone number found for: $target"
-                speak("לא מצאתי מספר עבור $target")
-            }
-            1 -> {
-                val match = matches.first()
-                status.text = "Opening Bluetooth phone for ${match.name}: ${match.number}"
-                speak("מחייג אל ${match.name}")
-                BridgeActions.dial(this, match.number)
-            }
-            else -> {
-                status.text = "Choose the contact to call."
-                val labels = matches.map { "${it.name} — ${it.number}" }.toTypedArray()
-                AlertDialog.Builder(this)
-                    .setTitle("Which contact?")
-                    .setItems(labels) { _, which ->
-                        val match = matches[which]
-                        speak("מחייג אל ${match.name}")
-                        BridgeActions.dial(this, match.number)
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
-        }
+        status.text = "Opening the Bluetooth phonebook. Find $target and confirm the call on the Bluetooth screen."
+        speak("פותח את ספר הטלפונים. חפש את $target ואשר את השיחה בעצמך")
+        BridgeActions.openBluetoothPhonebook(this, target)
     }
 
     private fun startRecognition() {
@@ -201,7 +170,9 @@ class VoiceCommandActivity : Activity() {
                         VoiceAction.MUSIC_PREVIOUS -> "השיר הקודם"
                         VoiceAction.MUSIC_PLAY_PAUSE -> "מוזיקה"
                         VoiceAction.OPEN_CHATGPT -> "פותח צ'אט ג'י פי טי"
-                        VoiceAction.OPEN_BLUETOOTH_PHONE -> "פותח טלפון בלוטות"
+                        VoiceAction.OPEN_BLUETOOTH_PHONE -> "פותח את ספר הטלפונים"
+                        VoiceAction.HOTSPOT_ON -> "מפעיל נקודה חמה"
+                        VoiceAction.HOTSPOT_OFF -> "מכבה נקודה חמה"
                     })
                 }
             }
@@ -218,12 +189,6 @@ class VoiceCommandActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_AUDIO && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startRecognition()
         else if (requestCode == REQUEST_AUDIO) Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show()
-        if (requestCode == REQUEST_CONTACTS) {
-            val target = pendingContactTarget
-            pendingContactTarget = null
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && target != null) handleContactCall(target)
-            else speak("לא ניתנה הרשאה לאנשי קשר")
-        }
     }
 
     override fun onDestroy() {
@@ -240,7 +205,6 @@ class VoiceCommandActivity : Activity() {
         const val MODE_COMMAND = "command"
         const val MODE_CHATGPT = "chatgpt"
         private const val REQUEST_AUDIO = 701
-        private const val REQUEST_CONTACTS = 702
         private const val VOICE_PACKAGE = "com.hebvoice.stt"
         private const val VOICE_SERVICE = "com.hebvoice.stt.HebrewRecognitionService"
     }
