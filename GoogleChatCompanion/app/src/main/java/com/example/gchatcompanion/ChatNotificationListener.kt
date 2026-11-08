@@ -3,7 +3,6 @@ package com.example.gchatcompanion
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
@@ -61,13 +60,12 @@ class ChatNotificationListener : NotificationListenerService() {
         if (sbn.packageName != CHAT_PACKAGE) return
         val notification = sbn.notification
         val extras = notification.extras ?: Bundle()
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-            ?.takeIf { it.isNotBlank() } ?: "Google Chat"
-        val body = (
-            extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-                ?: extras.getCharSequence(Notification.EXTRA_TEXT)
-                ?: extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)
-        )?.toString()?.takeIf { it.isNotBlank() } ?: "New message"
+        val title = NotificationPreview.title(extras.getCharSequence(Notification.EXTRA_TITLE))
+        val body = NotificationPreview.body(
+            extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
+            extras.getCharSequence(Notification.EXTRA_TEXT),
+            extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)
+        )
 
         saveMessage(sbn.key, title, body, sbn.postTime, hasReplyAction(notification))
         if (getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("mirror", true)) {
