@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 
@@ -22,6 +23,10 @@ object BridgeActions {
     const val CHATGPT_PACKAGE = "com.openai.chatgpt"
     const val BLUETOOTH_PHONE_PACKAGE = "com.tw.bt"
     const val BLUETOOTH_PHONE_ACTIVITY = "com.tw.bt.ATBluetoothActivity"
+    const val AUTOMATION_PREFS = "assistant_bridge_automation"
+    const val KEY_PENDING_PHONEBOOK = "pending_phonebook"
+    const val KEY_PHONE_TARGET = "phone_target"
+    const val KEY_PENDING_HOTSPOT = "pending_hotspot"
 
     fun mediaKey(context: Context, keyCode: Int) {
         try {
@@ -100,7 +105,45 @@ object BridgeActions {
         }
     }
 
-    fun openBluetoothPhone(context: Context) = openPackage(context, BLUETOOTH_PHONE_PACKAGE)
+    fun openBluetoothPhone(context: Context) = openBluetoothPhonebook(context)
+
+    /**
+     * Opens the TS10 Bluetooth app and asks its Accessibility companion to select
+     * the Phone Book tab. The user still chooses the contact and confirms the call.
+     */
+    fun openBluetoothPhonebook(context: Context, contactTarget: String? = null) {
+        context.getSharedPreferences(AUTOMATION_PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_PENDING_PHONEBOOK, true)
+            .putString(KEY_PHONE_TARGET, contactTarget.orEmpty())
+            .apply()
+        openPackage(context, BLUETOOTH_PHONE_PACKAGE)
+    }
+
+    /**
+     * Opens Android's built-in Hotspot & tethering screen. The enabled Accessibility
+     * service locates the Wi-Fi hotspot switch and changes it only after checking its
+     * current state, then returns to the app that was previously in the foreground.
+     */
+    fun setHotspot(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(AUTOMATION_PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_PENDING_HOTSPOT, if (enabled) "on" else "off")
+            .apply()
+        val tetherSettings = Intent("android.settings.TETHER_SETTINGS")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(tetherSettings)
+        } catch (e: Exception) {
+            Log.w("AssistantBridge", "Tether settings unavailable; opening main Settings", e)
+            try {
+                context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (fallback: Exception) {
+                Log.e("AssistantBridge", "Could not open hotspot settings", fallback)
+                context.getSharedPreferences(AUTOMATION_PREFS, Context.MODE_PRIVATE).edit()
+                    .remove(KEY_PENDING_HOTSPOT)
+                    .apply()
+            }
+        }
+    }
 
     fun findContacts(context: Context, query: String): List<ContactMatch> {
         if (query.isBlank()) return emptyList()
