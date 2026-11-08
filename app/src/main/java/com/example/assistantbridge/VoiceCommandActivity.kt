@@ -2,10 +2,13 @@ package com.example.assistantbridge
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -15,6 +18,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.text.Normalizer
 import java.util.Locale
 
 class VoiceCommandActivity : Activity() {
@@ -22,6 +26,8 @@ class VoiceCommandActivity : Activity() {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var mode: String = MODE_COMMAND
+    private var pendingContactTarget: String? = null
+    private var pendingCallNumber: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,10 +74,116 @@ class VoiceCommandActivity : Activity() {
         tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "assistant-bridge")
     }
 
+    private fun normalizeContactName(value: String): String =
+        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace("\\p{Mn}+".toRegex(), "")
+            .replace("[^\\p{L}\\p{N}]+".toRegex(), " ")
+            .trim()
+            .replace("\\s+".toRegex(), " ")
+
     private fun handleContactCall(target: String) {
-        status.text = "Opening the Bluetooth phonebook. Find $target and confirm the call on the Bluetooth screen."
-        speak("פותח את ספר הטלפונים. חפש את $target ואשר את השיחה בעצמך")
-        BridgeActions.openBluetoothPhonebook(this, target)
+        pendingContactTarget = target
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            status.text = "Permission is needed to search your synced contacts."
+            requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), REQUEST_CONTACTS)
+            return
+        }
+        searchContactsAndConfirm(target)
+    }
+
+    private fun searchContactsAndConfirm(target: String) {
+        val matches = mutableListOf<Pair<String, String>>()
+        val query = normalizeContactName(target)
+        try {
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                null,
+                null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+            )?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameIndex)?.trim().orEmpty()
+                    val number = cursor.getString(numberIndex)?.trim().orEmpty()
+                    if (name.isNotBlank() && number.isNotBlank() &&
+                        normalizeContactName(name).contains(query)) {
+                        val item = name to number
+                        if (item !in matches) matches.add(item)
+                    }
+                }
+            }
+        } catch (e: SecurityException) {
+            status.text = "Contacts permission was not granted."
+            speak("אין הרשאה לקריאת אנשי הקשר")
+            return
+        } catch (e: Exception) {
+            status.text = "Could not read contacts: ${e.message}"
+            return
+        }
+
+        when (matches.size) {
+            0 -> {
+                status.text = "No contact matching $target was found in synced Android Contacts."
+                speak("לא מצאתי איש קשר בשם $target")
+            }
+            1 -> showCallConfirmation(matches[0].first, matches[0].second)
+            else -> {
+                val labels = matches.map { "${it.first} — ${it.second}" }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("Choose a contact")
+                    .setItems(labels) { _, which ->
+                        val selected = matches[which]
+                        showCallConfirmation(selected.first, selected.second)
+                    }
+                    .setNegativeButton("Cancel") { _, _ -> status.text = "Call cancelled." }
+                    .show()
+            }
+        }
+    }
+
+    private fun showCallConfirmation(name: String, number: String) {
+        status.text = "Waiting for confirmation to call $name."
+        speak("האם להתקשר אל $name")
+        AlertDialog.Builder(this)
+            .setTitle("Call $name?")
+            .setMessage("$name\n$number")
+            .setPositiveButton("Yes") { _, _ -> placeConfirmedCall(number) }
+            .setNegativeButton("No") { _, _ ->
+                status.text = "Call cancelled."
+                speak("השיחה בוטלה")
+            }
+            .setOnCancelListener {
+                status.text = "Call cancelled."
+            }
+            .show()
+    }
+
+    private fun placeConfirmedCall(number: String) {
+        pendingCallNumber = number
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), REQUEST_CALL)
+            return
+        }
+        startConfirmedCall(number)
+    }
+
+    private fun startConfirmedCall(number: String) {
+        try {
+            val callIntent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", number, null))
+            startActivity(callIntent)
+            status.text = "Calling $number."
+        } catch (e: Exception) {
+            status.text = "Could not start the call: ${e.message}"
+            speak("לא הצלחתי להתחיל את השיחה")
+        } finally {
+            pendingCallNumber = null
+        }
     }
 
     private fun startRecognition() {
@@ -132,7 +244,6 @@ class VoiceCommandActivity : Activity() {
             }
             status.text = "Heard: $recognized"
             if (mode == MODE_CHATGPT) {
-                // Hebrew Voice returns Hebrew text directly; do not transliterate it.
                 BridgeActions.sendTextToChatGPT(this@VoiceCommandActivity, recognized)
                 status.append("\nHebrew text sent to ChatGPT: $recognized")
                 status.append("\nChatGPT opened with the recognized text. Tap Send if it is not sent automatically.")
@@ -187,8 +298,28 @@ class VoiceCommandActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_AUDIO && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startRecognition()
-        else if (requestCode == REQUEST_AUDIO) Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show()
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        when (requestCode) {
+            REQUEST_AUDIO -> if (granted) startRecognition()
+                else Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show()
+            REQUEST_CONTACTS -> {
+                val target = pendingContactTarget
+                if (granted && target != null) searchContactsAndConfirm(target)
+                else {
+                    status.text = "Contacts permission is required to search names."
+                    speak("נדרשת הרשאה לאנשי קשר")
+                }
+            }
+            REQUEST_CALL -> {
+                val number = pendingCallNumber
+                if (granted && number != null) startConfirmedCall(number)
+                else {
+                    pendingCallNumber = null
+                    status.text = "Call permission was denied. No call was placed."
+                    speak("לא ניתנה הרשאה להתקשר. לא בוצעה שיחה")
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -205,6 +336,8 @@ class VoiceCommandActivity : Activity() {
         const val MODE_COMMAND = "command"
         const val MODE_CHATGPT = "chatgpt"
         private const val REQUEST_AUDIO = 701
+        private const val REQUEST_CONTACTS = 702
+        private const val REQUEST_CALL = 703
         private const val VOICE_PACKAGE = "com.hebvoice.stt"
         private const val VOICE_SERVICE = "com.hebvoice.stt.HebrewRecognitionService"
     }
