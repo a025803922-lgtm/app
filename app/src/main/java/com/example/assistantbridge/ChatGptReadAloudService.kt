@@ -41,16 +41,23 @@ class ChatGptReadAloudService : AccessibilityService() {
             Log.w(TAG, "Hotspot switch was not found; leaving Settings open for manual control")
         }
     }
+    // Once the in-call screen proves ACTION_CALL has launched the call,
+    // bring the app that was open before the call back to the foreground.
+    // The call itself remains active in the system/Bluetooth stack.
     private val callReturnRunnable = Runnable {
-        val root = rootInActiveWindow
-        val activePackage = root?.packageName?.toString()
-        if (callUiSeen && activePackage != null && !isCallUiPackage(activePackage) &&
-            !containsCallUiMarker(root)) {
-            Log.i(TAG, "Call UI disappeared; returning to $returnPackage")
+        if (callUiSeen) {
+            Log.i(TAG, "Call launched; returning immediately to $returnPackage while call continues")
             callUiSeen = false
             restorePreviousApp()
         }
         callReturnScheduled = false
+    }
+
+    private fun scheduleReturnAfterCallLaunch() {
+        if (callReturnScheduled) return
+        callReturnScheduled = true
+        handler.removeCallbacks(callReturnRunnable)
+        handler.postDelayed(callReturnRunnable, CALL_LAUNCH_RETURN_DELAY_MS)
     }
 
     private val automationPrefs by lazy {
@@ -132,14 +139,15 @@ class ChatGptReadAloudService : AccessibilityService() {
             if (containsCallUiMarker(root)) {
                 if (returnPackage == null) returnPackage = lastForegroundPackage
                 callUiSeen = true
+                scheduleReturnAfterCallLaunch()
             }
             return
         }
 
-        if (callUiSeen && !callReturnScheduled) {
-            callReturnScheduled = true
-            handler.removeCallbacks(callReturnRunnable)
-            handler.postDelayed(callReturnRunnable, CALL_RETURN_DELAY_MS)
+        if (callUiSeen) {
+            // Some head units expose the active-call screen from the Bluetooth
+            // app rather than the Android phone package.
+            scheduleReturnAfterCallLaunch()
         }
     }
 
@@ -196,13 +204,10 @@ class ChatGptReadAloudService : AccessibilityService() {
     private fun inspectBluetoothCallScreen() {
         val root = rootInActiveWindow ?: return
         if (containsCallUiMarker(root)) {
+            if (returnPackage == null) returnPackage = lastForegroundPackage
             callUiSeen = true
+            scheduleReturnAfterCallLaunch()
             return
-        }
-        if (callUiSeen && !callReturnScheduled) {
-            callReturnScheduled = true
-            handler.removeCallbacks(callReturnRunnable)
-            handler.postDelayed(callReturnRunnable, CALL_RETURN_DELAY_MS)
         }
     }
 
@@ -498,6 +503,6 @@ class ChatGptReadAloudService : AccessibilityService() {
         private const val HOTSPOT_RETRY_MS = 500L
         private const val HOTSPOT_VERIFY_DELAY_MS = 900L
         private const val HOTSPOT_TIMEOUT_MS = 9000L
-        private const val CALL_RETURN_DELAY_MS = 1800L
+        private const val CALL_LAUNCH_RETURN_DELAY_MS = 900L
     }
 }
