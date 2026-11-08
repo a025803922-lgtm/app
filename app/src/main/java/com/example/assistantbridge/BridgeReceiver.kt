@@ -19,6 +19,8 @@ class BridgeReceiver : BroadcastReceiver() {
             BridgeCommand.MUSIC_PREVIOUS -> BridgeActions.mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
             BridgeCommand.VOLUME_UP -> BridgeActions.adjustMusicVolume(context, true)
             BridgeCommand.VOLUME_DOWN -> BridgeActions.adjustMusicVolume(context, false)
+            BridgeCommand.HOTSPOT_ON -> BridgeActions.setHotspot(context, true)
+            BridgeCommand.HOTSPOT_OFF -> BridgeActions.setHotspot(context, false)
             BridgeCommand.OPEN_APP -> BridgeActions.openPackage(
                 context, intent.getStringExtra(BridgeActions.EXTRA_PACKAGE) ?: return
             )
