@@ -5,6 +5,9 @@ on:
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - "GoogleChatCompanion/**"
+      - ".github/workflows/google-chat-companion.yml"
   workflow_dispatch:
 permissions:
   contents: write
