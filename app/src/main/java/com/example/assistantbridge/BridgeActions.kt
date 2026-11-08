@@ -170,9 +170,8 @@ object BridgeActions {
 
     fun dial(context: Context, number: String) {
         val uri = Uri.fromParts("tel", number, null)
-        // The TS10 Bluetooth phone app appears to handle ACTION_CALL rather than ACTION_DIAL.
-        // Its own confirmation dialog should remain the final user confirmation before a call is placed.
-        val bluetoothIntent = Intent(Intent.ACTION_CALL, uri).apply {
+        // ACTION_CALL starts the call immediately on this TS10; use ACTION_DIAL so the user must press Call.
+        val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri).apply {
             component = ComponentName(BLUETOOTH_PHONE_PACKAGE, BLUETOOTH_PHONE_ACTIVITY)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
