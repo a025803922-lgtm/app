@@ -382,7 +382,7 @@ class ChatGptReadAloudService : AccessibilityService() {
     private fun isIgnoredForReturnPackage(value: String): Boolean {
         val lower = value.lowercase(Locale.ROOT)
         return lower == packageName || lower == CHATGPT_PACKAGE ||
-            lower == BLUETOOTH_PACKAGE || lower == SETTINGS_PACKAGE ||
+            lower == BLUETOOTH_PACKAGE || isSettingsLikePackage(lower) ||
             lower.contains("systemui") || lower.contains("launcher") ||
             isCallUiPackage(lower)
     }
