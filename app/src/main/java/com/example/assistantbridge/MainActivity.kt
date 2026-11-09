@@ -27,6 +27,23 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(12, 24, 12, 24)
         })
+
+        // These manual controls call the same action pipeline as voice commands,
+        // but do not start speech recognition or depend on spoken input.
+        layout.addView(TextView(this).apply {
+            text = "MANUAL TESTING — no voice required"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setPadding(8, 18, 8, 8)
+        })
+        addTestButton(layout, "TEST: ACTIVATE HOTSPOT") {
+            BridgeActions.setHotspot(this, true)
+        }
+        addTestButton(layout, "TEST: DEACTIVATE HOTSPOT") {
+            BridgeActions.setHotspot(this, false)
+        }
+        addTestButton(layout, "Open Bluetooth phonebook") { BridgeActions.openBluetoothPhonebook(this) }
+
         addTestButton(layout, "Music: play / pause") { BridgeActions.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
         addTestButton(layout, "Music: next track") { BridgeActions.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_NEXT) }
         addTestButton(layout, "Music: previous track") { BridgeActions.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
@@ -40,9 +57,6 @@ class MainActivity : Activity() {
         }
         addTestButton(layout, "Open ChatGPT") { BridgeActions.openChatGPT(this) }
         addTestButton(layout, "Open Waze") { BridgeActions.openPackage(this, "com.waze") }
-        addTestButton(layout, "Open Bluetooth phonebook") { BridgeActions.openBluetoothPhonebook(this) }
-        addTestButton(layout, "Turn hotspot ON") { BridgeActions.setHotspot(this, true) }
-        addTestButton(layout, "Turn hotspot OFF") { BridgeActions.setHotspot(this, false) }
         updateStatus = TextView(this).apply {
             text = "Updates are checked against GitHub Releases."
             textSize = 14f
