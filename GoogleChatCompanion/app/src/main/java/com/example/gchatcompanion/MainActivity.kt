@@ -54,10 +54,15 @@ class MainActivity : Activity() {
         })
 
         root.addView(Button(this).apply {
+            text = "Open Google Chat"
+            setOnClickListener { startActivity(Intent(this@MainActivity, WebChatActivity::class.java)) }
+        })
+
+        root.addView(Button(this).apply {
             text = "Refresh conversations"; setOnClickListener { renderHistory() }
         })
         root.addView(TextView(this).apply {
-            text = "Recent messages"; textSize = 20f; setPadding(0, 20, 0, 8)
+            text = "Recent notification previews"; textSize = 20f; setPadding(0, 20, 0, 8)
         })
 
         val scroll = ScrollView(this)
@@ -67,7 +72,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
         root.addView(TextView(this).apply {
-            text = "This first version reads Android notifications only. It cannot access full chat history or typing status."
+            text = "Messages are shown in Google Chat. This list contains notification previews only."
             textSize = 12f; setPadding(0, 12, 0, 0)
         })
 
