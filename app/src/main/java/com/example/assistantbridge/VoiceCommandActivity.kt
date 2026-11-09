@@ -175,6 +175,9 @@ class VoiceCommandActivity : Activity() {
 
     private fun startConfirmedCall(number: String) {
         try {
+            // This is the actual contact-call path (ACTION_CALL), so persist the
+            // previous foreground app here, immediately before handing off to Android.
+            BridgeActions.rememberReturnApp(this)
             val callIntent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", number, null))
             startActivity(callIntent)
             status.text = "Calling $number."
