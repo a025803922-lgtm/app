@@ -26,6 +26,8 @@ object BridgeActions {
     const val KEY_PENDING_HOTSPOT = "pending_hotspot"
     const val KEY_HOTSPOT_STAGE = "hotspot_stage"
     const val KEY_HOTSPOT_TOGGLE_SENT = "hotspot_toggle_sent"
+    const val KEY_LAST_FOREGROUND_PACKAGE = "last_foreground_package"
+    const val KEY_CALL_RETURN_PACKAGE = "call_return_package"
 
     fun mediaKey(context: Context, keyCode: Int) {
         try {
@@ -175,6 +177,14 @@ object BridgeActions {
     }
 
     fun dial(context: Context, number: String) {
+        // The Accessibility service continuously records the last real foreground app.
+        // Save it before opening the Bluetooth dialer so it can be restored as soon as
+        // the call becomes active, without waiting for the call to end.
+        val prefs = context.getSharedPreferences(AUTOMATION_PREFS, Context.MODE_PRIVATE)
+        val previousApp = prefs.getString(KEY_LAST_FOREGROUND_PACKAGE, null)
+        if (!previousApp.isNullOrBlank() && previousApp != context.packageName) {
+            prefs.edit().putString(KEY_CALL_RETURN_PACKAGE, previousApp).apply()
+        }
         val uri = Uri.fromParts("tel", number, null)
         // ACTION_CALL starts the call immediately on this TS10; use ACTION_DIAL so the user must press Call.
         val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri).apply {
