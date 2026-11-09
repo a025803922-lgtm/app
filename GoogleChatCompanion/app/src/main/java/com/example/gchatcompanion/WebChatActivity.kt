@@ -26,6 +26,7 @@ class WebChatActivity : Activity() {
     private lateinit var progress: ProgressBar
     private lateinit var pageStatus: TextView
     private lateinit var desktopButton: Button
+    private lateinit var defaultUserAgent: String
 
     private var desktopMode = false
     private var sawGoogleSignIn = false
@@ -77,6 +78,7 @@ class WebChatActivity : Activity() {
         root.addView(pageStatus)
 
         webView = WebView(this)
+        defaultUserAgent = webView.settings.userAgentString
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -167,7 +169,7 @@ class WebChatActivity : Activity() {
             desktopMode = false
             switchingToDesktop = false
             webView.settings.apply {
-                userAgentString = DEFAULT_USER_AGENT
+                userAgentString = defaultUserAgent
                 useWideViewPort = false
                 loadWithOverviewMode = false
             }
@@ -223,7 +225,6 @@ class WebChatActivity : Activity() {
         private const val CHAT_URL = "https://chat.google.com/"
         private const val STATE_DESKTOP_MODE = "desktop_mode"
         private const val STATE_SAW_SIGN_IN = "saw_google_sign_in"
-        private const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Linux; Android 12; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
