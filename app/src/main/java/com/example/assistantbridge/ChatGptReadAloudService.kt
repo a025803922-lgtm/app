@@ -97,6 +97,9 @@ class ChatGptReadAloudService : AccessibilityService() {
 
         if (!isIgnoredForReturnPackage(packageName)) {
             lastForegroundPackage = packageName
+            automationPrefs.edit()
+                .putString(BridgeActions.KEY_LAST_FOREGROUND_PACKAGE, packageName)
+                .apply()
         }
 
         if (packageName == CHATGPT_PACKAGE) {
@@ -123,8 +126,16 @@ class ChatGptReadAloudService : AccessibilityService() {
             return
         }
 
-        if (packageName == SETTINGS_PACKAGE && automationPrefs.getString(BridgeActions.KEY_PENDING_HOTSPOT, null) != null) {
-            if (returnPackage == null) returnPackage = lastForegroundPackage
+        val pendingHotspot = automationPrefs.getString(BridgeActions.KEY_PENDING_HOTSPOT, null)
+        // Some TS10 firmware builds expose tethering through a vendor Settings
+        // activity. Try the visible accessibility tree on Settings-like windows and
+        // every window transition while a hotspot action is pending.
+        if (pendingHotspot != null && packageName != this.packageName &&
+            (isSettingsLikePackage(packageName) || eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)) {
+            if (returnPackage == null) {
+                returnPackage = automationPrefs.getString(BridgeActions.KEY_LAST_FOREGROUND_PACKAGE, null)
+                    ?: lastForegroundPackage
+            }
             handler.removeCallbacks(hotspotRetryRunnable)
             handler.postDelayed(hotspotRetryRunnable, HOTSPOT_RETRY_MS)
             if (!hotspotTimeoutScheduled) {
@@ -137,7 +148,10 @@ class ChatGptReadAloudService : AccessibilityService() {
         if (isCallUiPackage(packageName)) {
             val root = rootInActiveWindow
             if (containsCallUiMarker(root)) {
-                if (returnPackage == null) returnPackage = lastForegroundPackage
+                if (returnPackage == null) {
+                    returnPackage = automationPrefs.getString(BridgeActions.KEY_CALL_RETURN_PACKAGE, null)
+                        ?: lastForegroundPackage
+                }
                 callUiSeen = true
                 scheduleReturnAfterCallLaunch()
             }
@@ -204,7 +218,10 @@ class ChatGptReadAloudService : AccessibilityService() {
     private fun inspectBluetoothCallScreen() {
         val root = rootInActiveWindow ?: return
         if (containsCallUiMarker(root)) {
-            if (returnPackage == null) returnPackage = lastForegroundPackage
+            if (returnPackage == null) {
+                returnPackage = automationPrefs.getString(BridgeActions.KEY_CALL_RETURN_PACKAGE, null)
+                    ?: lastForegroundPackage
+            }
             callUiSeen = true
             scheduleReturnAfterCallLaunch()
             return
@@ -284,6 +301,7 @@ class ChatGptReadAloudService : AccessibilityService() {
     private fun restorePreviousApp() {
         val target = returnPackage
         returnPackage = null
+        automationPrefs.edit().remove(BridgeActions.KEY_CALL_RETURN_PACKAGE).apply()
         if (target.isNullOrBlank() || target == packageName) return
         try {
             val launch = packageManager.getLaunchIntentForPackage(target)
@@ -347,6 +365,12 @@ class ChatGptReadAloudService : AccessibilityService() {
             "end call", "hang up", "disconnect call", "call duration", "in call",
             "סיום שיחה", "ניתוק שיחה", "נתק שיחה", "שיחה פעילה"
         ).any { text.contains(it) }
+    }
+
+    private fun isSettingsLikePackage(value: String): Boolean {
+        val lower = value.lowercase(Locale.ROOT)
+        return lower.contains("settings") || lower.contains("tether") ||
+            lower.contains("connectivity") || lower.contains("network")
     }
 
     private fun isCallUiPackage(value: String): Boolean {
@@ -502,7 +526,7 @@ class ChatGptReadAloudService : AccessibilityService() {
         private const val PHONEBOOK_FALLBACK_DELAY_MS = 700L
         private const val HOTSPOT_RETRY_MS = 500L
         private const val HOTSPOT_VERIFY_DELAY_MS = 900L
-        private const val HOTSPOT_TIMEOUT_MS = 9000L
+        private const val HOTSPOT_TIMEOUT_MS = 15000L
         private const val CALL_LAUNCH_RETURN_DELAY_MS = 900L
     }
 }
