@@ -17,17 +17,25 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Displays the full Google Chat web interface in desktop mode.
- * Authentication and message handling remain with Google.
- * If Google blocks sign-in inside an embedded WebView, the user can continue in their normal browser.
+ * Displays Google Chat in a WebView.
+ * Keep the default Android WebView user-agent during Google sign-in, then optionally
+ * switch to desktop mode in the same WebView so the existing cookies/session are retained.
  */
 class WebChatActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var progress: ProgressBar
     private lateinit var pageStatus: TextView
+    private lateinit var desktopButton: Button
+
+    private var desktopMode = false
+    private var sawGoogleSignIn = false
+    private var switchingToDesktop = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        desktopMode = savedInstanceState?.getBoolean(STATE_DESKTOP_MODE, false) ?: false
+        sawGoogleSignIn = savedInstanceState?.getBoolean(STATE_SAW_SIGN_IN, false) ?: false
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -44,6 +52,11 @@ class WebChatActivity : Activity() {
             text = "Refresh"
             setOnClickListener { webView.reload() }
         })
+        desktopButton = Button(this).apply {
+            text = if (desktopMode) "Mobile view" else "Desktop view"
+            setOnClickListener { toggleDesktopMode() }
+        }
+        toolbar.addView(desktopButton)
         toolbar.addView(Button(this).apply {
             text = "Open in browser"
             setOnClickListener { openInBrowser() }
@@ -75,10 +88,10 @@ class WebChatActivity : Activity() {
             allowContentAccess = true
             safeBrowsingEnabled = true
 
-            // Ask Google for its full desktop web interface instead of the mobile app-install flow.
-            userAgentString = DESKTOP_USER_AGENT
-            useWideViewPort = true
-            loadWithOverviewMode = true
+            // Use Android WebView's normal user-agent for sign-in. Desktop mode is applied later.
+            if (desktopMode) userAgentString = DESKTOP_USER_AGENT
+            useWideViewPort = desktopMode
+            loadWithOverviewMode = desktopMode
         }
         android.webkit.CookieManager.getInstance().apply {
             setAcceptCookie(true)
@@ -97,11 +110,25 @@ class WebChatActivity : Activity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 pageStatus.text = "Loading Google Chat…"
                 progress.visibility = View.VISIBLE
+                val host = Uri.parse(url ?: "").host.orEmpty()
+                if (host == "accounts.google.com" || host.endsWith(".accounts.google.com")) {
+                    sawGoogleSignIn = true
+                }
             }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 progress.visibility = View.GONE
                 pageStatus.text = view?.title ?: "Google Chat"
+
+                val host = Uri.parse(url ?: "").host.orEmpty()
+                // When Google returns from its sign-in domain to Chat, switch to desktop mode
+                // once. The same WebView is retained, so its cookies are not discarded.
+                if (!desktopMode && sawGoogleSignIn && host == "chat.google.com" && !switchingToDesktop) {
+                    switchingToDesktop = true
+                    applyDesktopMode()
+                }
             }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val uri = request?.url ?: return false
                 val scheme = uri.scheme ?: return false
@@ -114,6 +141,7 @@ class WebChatActivity : Activity() {
                 }
                 return false
             }
+
             override fun onReceivedError(
                 view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?
             ) {
@@ -134,6 +162,35 @@ class WebChatActivity : Activity() {
         }
     }
 
+    private fun toggleDesktopMode() {
+        if (desktopMode) {
+            desktopMode = false
+            switchingToDesktop = false
+            webView.settings.apply {
+                userAgentString = DEFAULT_USER_AGENT
+                useWideViewPort = false
+                loadWithOverviewMode = false
+            }
+            desktopButton.text = "Desktop view"
+            webView.reload()
+        } else {
+            applyDesktopMode()
+        }
+    }
+
+    private fun applyDesktopMode() {
+        if (desktopMode) return
+        desktopMode = true
+        webView.settings.apply {
+            userAgentString = DESKTOP_USER_AGENT
+            useWideViewPort = true
+            loadWithOverviewMode = true
+        }
+        desktopButton.text = "Mobile view"
+        pageStatus.text = "Switching to desktop Chat…"
+        webView.reload()
+    }
+
     private fun openInBrowser() {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(CHAT_URL)))
@@ -143,6 +200,8 @@ class WebChatActivity : Activity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_DESKTOP_MODE, desktopMode)
+        outState.putBoolean(STATE_SAW_SIGN_IN, sawGoogleSignIn)
         webView.saveState(outState)
         super.onSaveInstanceState(outState)
     }
@@ -162,6 +221,9 @@ class WebChatActivity : Activity() {
 
     companion object {
         private const val CHAT_URL = "https://chat.google.com/"
+        private const val STATE_DESKTOP_MODE = "desktop_mode"
+        private const val STATE_SAW_SIGN_IN = "saw_google_sign_in"
+        private const val DEFAULT_USER_AGENT = "Mozilla/5.0 (Linux; Android 12; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
