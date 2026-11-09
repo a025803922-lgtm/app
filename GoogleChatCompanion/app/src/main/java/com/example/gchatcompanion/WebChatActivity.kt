@@ -17,7 +17,8 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Displays the real Google Chat website. Authentication and message handling remain with Google.
+ * Displays the full Google Chat web interface in desktop mode.
+ * Authentication and message handling remain with Google.
  * If Google blocks sign-in inside an embedded WebView, the user can continue in their normal browser.
  */
 class WebChatActivity : Activity() {
@@ -73,6 +74,11 @@ class WebChatActivity : Activity() {
             allowFileAccess = false
             allowContentAccess = true
             safeBrowsingEnabled = true
+
+            // Ask Google for its full desktop web interface instead of the mobile app-install flow.
+            userAgentString = DESKTOP_USER_AGENT
+            useWideViewPort = true
+            loadWithOverviewMode = true
         }
         android.webkit.CookieManager.getInstance().apply {
             setAcceptCookie(true)
@@ -156,5 +162,8 @@ class WebChatActivity : Activity() {
 
     companion object {
         private const val CHAT_URL = "https://chat.google.com/"
+        private const val DESKTOP_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
 }
