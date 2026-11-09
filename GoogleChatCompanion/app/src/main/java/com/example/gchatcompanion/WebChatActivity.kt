@@ -43,25 +43,15 @@ class WebChatActivity : Activity() {
         }
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(8, 8, 8, 8)
+            setPadding(2, 2, 2, 2)
         }
-        toolbar.addView(Button(this).apply {
-            text = "Back"
-            setOnClickListener { finish() }
-        })
-        toolbar.addView(Button(this).apply {
-            text = "Refresh"
-            setOnClickListener { webView.reload() }
-        })
-        desktopButton = Button(this).apply {
-            text = if (desktopMode) "Mobile view" else "Desktop view"
-            setOnClickListener { toggleDesktopMode() }
+        toolbar.addView(compactButton("Back") { finish() })
+        toolbar.addView(compactButton("Refresh") { webView.reload() })
+        desktopButton = compactButton(if (desktopMode) "Mobile" else "Desktop") {
+            toggleDesktopMode()
         }
         toolbar.addView(desktopButton)
-        toolbar.addView(Button(this).apply {
-            text = "Open in browser"
-            setOnClickListener { openInBrowser() }
-        })
+        toolbar.addView(compactButton("Browser") { openInBrowser() })
         root.addView(toolbar)
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -161,6 +151,20 @@ class WebChatActivity : Activity() {
             webView.loadUrl(CHAT_URL)
         } else {
             webView.restoreState(savedInstanceState)
+        }
+    }
+
+    private fun compactButton(label: String, action: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            textSize = 11f
+            isAllCaps = false
+            minHeight = (32 * resources.displayMetrics.density).toInt()
+            minimumHeight = (32 * resources.displayMetrics.density).toInt()
+            minWidth = 0
+            minimumWidth = 0
+            setPadding(6, 0, 6, 0)
+            setOnClickListener { action() }
         }
     }
 
