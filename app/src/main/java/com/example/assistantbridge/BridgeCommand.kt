@@ -6,6 +6,8 @@ enum class BridgeCommand {
     MUSIC_PREVIOUS,
     VOLUME_UP,
     VOLUME_DOWN,
+    HOTSPOT_ON,
+    HOTSPOT_OFF,
     OPEN_APP,
     OPEN_CHATGPT,
     VOICE_COMMAND,

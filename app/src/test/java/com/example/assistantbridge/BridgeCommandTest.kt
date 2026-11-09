@@ -11,6 +11,8 @@ class BridgeCommandTest {
         assertEquals(BridgeCommand.MUSIC_PREVIOUS, BridgeCommand.parse("MUSIC_PREVIOUS"))
         assertEquals(BridgeCommand.VOLUME_UP, BridgeCommand.parse("VOLUME_UP"))
         assertEquals(BridgeCommand.VOLUME_DOWN, BridgeCommand.parse("VOLUME_DOWN"))
+        assertEquals(BridgeCommand.HOTSPOT_ON, BridgeCommand.parse("HOTSPOT_ON"))
+        assertEquals(BridgeCommand.HOTSPOT_OFF, BridgeCommand.parse("HOTSPOT_OFF"))
         assertEquals(BridgeCommand.OPEN_APP, BridgeCommand.parse("OPEN_APP"))
         assertEquals(BridgeCommand.OPEN_CHATGPT, BridgeCommand.parse("OPEN_CHATGPT"))
         assertEquals(BridgeCommand.VOICE_COMMAND, BridgeCommand.parse("VOICE_COMMAND"))
@@ -30,6 +32,8 @@ class VoiceCommandParserTest {
         assertEquals(VoiceAction.VOLUME_UP, VoiceCommandParser.parse("הגבר קול"))
         assertEquals(VoiceAction.VOLUME_DOWN, VoiceCommandParser.parse("ווליום למטה"))
         assertEquals(VoiceAction.VOLUME_UP, VoiceCommandParser.parse("volume up"))
+        assertEquals(VoiceAction.VOLUME_UP, VoiceCommandParser.parse("hagdil et ha-volyum"))
+        assertEquals(VoiceAction.VOLUME_DOWN, VoiceCommandParser.parse("hanemich et ha-volyum"))
     }
 
     @Test fun parsesMediaAndChatGptCommands() {
@@ -37,6 +41,14 @@ class VoiceCommandParserTest {
         assertEquals(VoiceAction.MUSIC_PREVIOUS, VoiceCommandParser.parse("השיר הקודם"))
         assertEquals(VoiceAction.MUSIC_PLAY_PAUSE, VoiceCommandParser.parse("נגן מוזיקה"))
         assertEquals(VoiceAction.OPEN_CHATGPT, VoiceCommandParser.parse("פתח chatgpt"))
+        assertEquals(VoiceAction.HOTSPOT_ON, VoiceCommandParser.parse("turn on hotspot"))
+        assertEquals(VoiceAction.HOTSPOT_ON, VoiceCommandParser.parse("הפעל נקודה חמה"))
+        assertEquals(VoiceAction.HOTSPOT_OFF, VoiceCommandParser.parse("turn off hotspot"))
+        assertEquals(VoiceAction.HOTSPOT_OFF, VoiceCommandParser.parse("כבה נקודה חמה"))
+        assertEquals(VoiceAction.MUSIC_PLAY_PAUSE, VoiceCommandParser.parse("nagen music"))
+        assertEquals(VoiceAction.MUSIC_PLAY_PAUSE, VoiceCommandParser.parse("nagen muzika"))
+        assertEquals(VoiceAction.MUSIC_NEXT, VoiceCommandParser.parse("maavar haba"))
+        assertEquals(VoiceAction.MUSIC_PREVIOUS, VoiceCommandParser.parse("maavar kodem"))
     }
 
     @Test fun parsesBluetoothPhoneCommandsInHebrewAndEnglish() {
@@ -45,12 +57,20 @@ class VoiceCommandParserTest {
         assertEquals(VoiceAction.OPEN_BLUETOOTH_PHONE, VoiceCommandParser.parse("open bt phone"))
     }
 
-    @Test fun parsesCallContactTargets() {
+    @Test fun parsesCallContactTargetsInHebrewEnglishAndTransliteration() {
         assertEquals("home", VoiceCommandParser.parseCallTarget("call home"))
         assertEquals("david", VoiceCommandParser.parseCallTarget("Call David"))
-        assertEquals("לאמא", VoiceCommandParser.parseCallTarget("תתקשר לאמא"))
+        assertEquals("אמא", VoiceCommandParser.parseCallTarget("תתקשר לאמא"))
         assertEquals("דוד", VoiceCommandParser.parseCallTarget("התקשר אל דוד"))
-        assertNull(VoiceCommandParser.parseCallTarget("נגן מוזיקה"))
+        assertEquals("בית", VoiceCommandParser.parseCallTarget("titkasher la-bayit"))
+        assertEquals("בית", VoiceCommandParser.parseCallTarget("titkasher l-bayit"))
+        assertNull(VoiceCommandParser.parseCallTarget("nagen muzika"))
+    }
+
+    @Test fun convertsCommonPhoneticHebrewForChatGpt() {
+        assertEquals("אני רוצה לדעת מה מזג האוויר היום", HebrewTransliterator.toHebrew("ani rotze ladaat ma mezeg ha-avir hayom"))
+        assertEquals("שלום", HebrewTransliterator.toHebrew("shalom"))
+        assertEquals("What is the weather today?", HebrewTransliterator.toHebrew("What is the weather today?"))
     }
 
     @Test fun rejectsUnrecognizedSpeech() {

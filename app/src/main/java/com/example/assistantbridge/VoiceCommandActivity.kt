@@ -6,35 +6,35 @@ import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import java.text.Normalizer
 import java.util.Locale
 
 class VoiceCommandActivity : Activity() {
     private lateinit var status: TextView
-    private lateinit var languagePicker: Spinner
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var mode: String = MODE_COMMAND
     private var pendingContactTarget: String? = null
+    private var pendingCallNumber: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_COMMAND
         tts = TextToSpeech(this) { result ->
             if (result == TextToSpeech.SUCCESS) {
-                val selected = if (getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_LANGUAGE, 1) == 2) Locale.US else Locale("he", "IL")
-                val languageResult = tts?.setLanguage(selected)
+                val languageResult = tts?.setLanguage(Locale("he", "IL"))
                 if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     tts?.setLanguage(Locale.getDefault())
                 }
@@ -46,30 +46,18 @@ class VoiceCommandActivity : Activity() {
             setPadding(24, 24, 24, 24)
         }
         status = TextView(this).apply {
-            text = if (mode == MODE_CHATGPT) "Speak a question. ChatGPT will open with the recognized text; you may need to tap Send."
-                else "Choose a language, then speak a command. You can also say: call followed by a contact name."
+            text = if (mode == MODE_CHATGPT) {
+                "Speak your question in normal Hebrew. The Hebrew Voice recognition service will send Hebrew text directly to ChatGPT."
+            } else {
+                "Say a command in Hebrew using English letters, for example: nagen muzika or titkasher la-bayit."
+            }
             textSize = 20f
             gravity = Gravity.CENTER
             setPadding(12, 24, 12, 24)
         }
         layout.addView(status)
-        languagePicker = Spinner(this).apply {
-            adapter = ArrayAdapter(this@VoiceCommandActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("Automatic (system)", "עברית", "English"))
-            setSelection(getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_LANGUAGE, 1))
-            onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt(KEY_LANGUAGE, position).apply()
-                    recognizer?.destroy()
-                    recognizer = null
-                    tts?.setLanguage(if (position == 2) Locale.US else Locale("he", "IL"))
-                }
-            }
-        }
-        layout.addView(languagePicker)
         layout.addView(Button(this).apply {
-            text = "Start listening"
+            text = if (mode == MODE_CHATGPT) "Start listening (Hebrew)" else "Start listening (voice commands)"
             setOnClickListener { startRecognition() }
         })
         layout.addView(Button(this).apply {
@@ -86,38 +74,118 @@ class VoiceCommandActivity : Activity() {
         tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "assistant-bridge")
     }
 
+    private fun normalizeContactName(value: String): String =
+        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace("\\p{Mn}+".toRegex(), "")
+            .replace("[^\\p{L}\\p{N}]+".toRegex(), " ")
+            .trim()
+            .replace("\\s+".toRegex(), " ")
+
     private fun handleContactCall(target: String) {
+        pendingContactTarget = target
         if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            pendingContactTarget = target
+            status.text = "Permission is needed to search your synced contacts."
             requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), REQUEST_CONTACTS)
-            status.text = "Allow contacts access to find $target."
             return
         }
-        val matches = BridgeActions.findContacts(this, target)
+        searchContactsAndConfirm(target)
+    }
+
+    private fun searchContactsAndConfirm(target: String) {
+        val matches = mutableListOf<Pair<String, String>>()
+        val query = normalizeContactName(target)
+        try {
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                null,
+                null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+            )?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameIndex)?.trim().orEmpty()
+                    val number = cursor.getString(numberIndex)?.trim().orEmpty()
+                    if (name.isNotBlank() && number.isNotBlank() &&
+                        normalizeContactName(name).contains(query)) {
+                        val item = name to number
+                        if (item !in matches) matches.add(item)
+                    }
+                }
+            }
+        } catch (e: SecurityException) {
+            status.text = "Contacts permission was not granted."
+            speak("אין הרשאה לקריאת אנשי הקשר")
+            return
+        } catch (e: Exception) {
+            status.text = "Could not read contacts: ${e.message}"
+            return
+        }
+
         when (matches.size) {
             0 -> {
-                status.text = "No phone number found for: $target"
-                speak("לא מצאתי מספר עבור $target")
+                status.text = "No contact matching $target was found in synced Android Contacts."
+                speak("לא מצאתי איש קשר בשם $target")
             }
-            1 -> {
-                val match = matches.first()
-                status.text = "Opening phone for ${match.name}: ${match.number}"
-                speak("מחייג אל ${match.name}")
-                BridgeActions.dial(this, match.number)
-            }
+            1 -> showCallConfirmation(matches[0].first, matches[0].second)
             else -> {
-                status.text = "Choose the contact to call."
-                val labels = matches.map { "${it.name} — ${it.number}" }.toTypedArray()
+                val labels = matches.map { "${it.first} — ${it.second}" }.toTypedArray()
                 AlertDialog.Builder(this)
-                    .setTitle("Which contact?")
+                    .setTitle("Choose a contact")
                     .setItems(labels) { _, which ->
-                        val match = matches[which]
-                        speak("מחייג אל ${match.name}")
-                        BridgeActions.dial(this, match.number)
+                        val selected = matches[which]
+                        showCallConfirmation(selected.first, selected.second)
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton("Cancel") { _, _ -> status.text = "Call cancelled." }
                     .show()
             }
+        }
+    }
+
+    private fun showCallConfirmation(name: String, number: String) {
+        status.text = "Waiting for confirmation to call $name."
+        speak("האם להתקשר אל $name")
+        AlertDialog.Builder(this)
+            .setTitle("Call $name?")
+            .setMessage("$name\n$number")
+            .setPositiveButton("Yes") { _, _ -> placeConfirmedCall(number) }
+            .setNegativeButton("No") { _, _ ->
+                status.text = "Call cancelled."
+                speak("השיחה בוטלה")
+            }
+            .setOnCancelListener {
+                status.text = "Call cancelled."
+            }
+            .show()
+    }
+
+    private fun placeConfirmedCall(number: String) {
+        pendingCallNumber = number
+        if (checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), REQUEST_CALL)
+            return
+        }
+        startConfirmedCall(number)
+    }
+
+    private fun startConfirmedCall(number: String) {
+        try {
+            // This is the actual contact-call path (ACTION_CALL), so persist the
+            // previous foreground app here, immediately before handing off to Android.
+            BridgeActions.rememberReturnApp(this)
+            val callIntent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel", number, null))
+            startActivity(callIntent)
+            status.text = "Calling $number."
+        } catch (e: Exception) {
+            status.text = "Could not start the call: ${e.message}"
+            speak("לא הצלחתי להתחיל את השיחה")
+        } finally {
+            pendingCallNumber = null
         }
     }
 
@@ -128,31 +196,30 @@ class VoiceCommandActivity : Activity() {
         }
         try {
             if (recognizer == null) {
-                val language = languagePicker.selectedItemPosition
-                recognizer = when (language) {
-                    1 -> {
-                        val service = ComponentName(VOICE_PACKAGE, VOICE_SERVICE)
-                        try {
-                            SpeechRecognizer.createSpeechRecognizer(this, service)
-                        } catch (_: Exception) {
-                            SpeechRecognizer.createSpeechRecognizer(this)
-                        }
+                recognizer = if (mode == MODE_CHATGPT) {
+                    try {
+                        SpeechRecognizer.createSpeechRecognizer(
+                            this,
+                            ComponentName(VOICE_PACKAGE, VOICE_SERVICE)
+                        )
+                    } catch (_: Exception) {
+                        SpeechRecognizer.createSpeechRecognizer(this)
                     }
-                    else -> SpeechRecognizer.createSpeechRecognizer(this)
+                } else {
+                    SpeechRecognizer.createSpeechRecognizer(this)
                 }.apply { setRecognitionListener(listener) }
             }
-            val language = languagePicker.selectedItemPosition
             val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                when (language) {
-                    1 -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL")
-                    2 -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                    else -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                }
+                val language = if (mode == MODE_CHATGPT) "he-IL" else "en-US"
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
+                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             }
+            status.text = if (mode == MODE_CHATGPT) "Listening in Hebrew…" else "Listening for voice commands…"
             recognizer?.startListening(request)
         } catch (e: Exception) {
             status.text = "Could not start voice recognition: ${e.message}"
@@ -167,7 +234,7 @@ class VoiceCommandActivity : Activity() {
         override fun onBufferReceived(buffer: ByteArray?) = Unit
         override fun onEndOfSpeech() { status.text = "Processing…" }
         override fun onError(error: Int) {
-            status.text = "Recognition error ($error). Check the selected voice service and microphone permission, then try again."
+            status.text = "Recognition error ($error). Check microphone permission and speech service, then try again."
             speak("לא שמעתי. נסה שוב")
         }
         override fun onResults(results: Bundle?) {
@@ -181,15 +248,29 @@ class VoiceCommandActivity : Activity() {
             status.text = "Heard: $recognized"
             if (mode == MODE_CHATGPT) {
                 BridgeActions.sendTextToChatGPT(this@VoiceCommandActivity, recognized)
+                status.append("\nHebrew text sent to ChatGPT: $recognized")
                 status.append("\nChatGPT opened with the recognized text. Tap Send if it is not sent automatically.")
-                speak("פתחתי את צ'אט ג'י פי טי עם השאלה. אם צריך, לחץ על שליחה")
+                speak("פתחתי את צ'אט ג'י פי טי עם השאלה")
             } else {
-                val callTarget = alternatives.asSequence().mapNotNull { VoiceCommandParser.parseCallTarget(it) }.firstOrNull()
+                val callTarget = alternatives.asSequence()
+                    .mapNotNull { VoiceCommandParser.parseCallTarget(it) }
+                    .firstOrNull()
                 if (callTarget != null) {
                     handleContactCall(callTarget)
                     return
                 }
-                val command = alternatives.asSequence().mapNotNull { VoiceCommandParser.parse(it) }.firstOrNull()
+                val appTarget = alternatives.asSequence()
+                    .mapNotNull { VoiceCommandParser.parseOpenAppTarget(it) }
+                    .firstOrNull()
+                if (appTarget != null) {
+                    val result = BridgeActions.openAppByName(this@VoiceCommandActivity, appTarget)
+                    status.append("\n$result")
+                    speak(if (result.startsWith("Opened")) "פותח את $appTarget" else "לא מצאתי את האפליקציה")
+                    return
+                }
+                val command = alternatives.asSequence()
+                    .mapNotNull { VoiceCommandParser.parse(it) }
+                    .firstOrNull()
                 if (command == null) {
                     status.append("\nCommand not recognized. Try a shorter phrase.")
                     speak("הפקודה לא זוהתה")
@@ -203,13 +284,16 @@ class VoiceCommandActivity : Activity() {
                         VoiceAction.MUSIC_PREVIOUS -> "השיר הקודם"
                         VoiceAction.MUSIC_PLAY_PAUSE -> "מוזיקה"
                         VoiceAction.OPEN_CHATGPT -> "פותח צ'אט ג'י פי טי"
-                        VoiceAction.OPEN_BLUETOOTH_PHONE -> "פותח טלפון בלוטות"
+                        VoiceAction.OPEN_BLUETOOTH_PHONE -> "פותח את ספר הטלפונים"
+                        VoiceAction.HOTSPOT_ON -> "מפעיל נקודה חמה"
+                        VoiceAction.HOTSPOT_OFF -> "מכבה נקודה חמה"
                     })
                 }
             }
         }
         override fun onPartialResults(partialResults: Bundle?) {
-            val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+            val alternatives = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+            val partial = alternatives.firstOrNull()
             if (!partial.isNullOrBlank()) status.text = "Hearing: $partial"
         }
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -217,13 +301,27 @@ class VoiceCommandActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_AUDIO && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startRecognition()
-        else if (requestCode == REQUEST_AUDIO) Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show()
-        if (requestCode == REQUEST_CONTACTS) {
-            val target = pendingContactTarget
-            pendingContactTarget = null
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && target != null) handleContactCall(target)
-            else speak("לא ניתנה הרשאה לאנשי קשר")
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        when (requestCode) {
+            REQUEST_AUDIO -> if (granted) startRecognition()
+                else Toast.makeText(this, "Microphone permission is required.", Toast.LENGTH_LONG).show()
+            REQUEST_CONTACTS -> {
+                val target = pendingContactTarget
+                if (granted && target != null) searchContactsAndConfirm(target)
+                else {
+                    status.text = "Contacts permission is required to search names."
+                    speak("נדרשת הרשאה לאנשי קשר")
+                }
+            }
+            REQUEST_CALL -> {
+                val number = pendingCallNumber
+                if (granted && number != null) startConfirmedCall(number)
+                else {
+                    pendingCallNumber = null
+                    status.text = "Call permission was denied. No call was placed."
+                    speak("לא ניתנה הרשאה להתקשר. לא בוצעה שיחה")
+                }
+            }
         }
     }
 
@@ -242,9 +340,8 @@ class VoiceCommandActivity : Activity() {
         const val MODE_CHATGPT = "chatgpt"
         private const val REQUEST_AUDIO = 701
         private const val REQUEST_CONTACTS = 702
+        private const val REQUEST_CALL = 703
         private const val VOICE_PACKAGE = "com.hebvoice.stt"
         private const val VOICE_SERVICE = "com.hebvoice.stt.HebrewRecognitionService"
-        private const val PREFS = "assistant_bridge"
-        private const val KEY_LANGUAGE = "voice_language"
     }
 }
