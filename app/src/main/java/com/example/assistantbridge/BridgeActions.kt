@@ -176,15 +176,19 @@ object BridgeActions {
         context.startActivity(intent)
     }
 
-    fun dial(context: Context, number: String) {
-        // The Accessibility service continuously records the last real foreground app.
-        // Save it before opening the Bluetooth dialer so it can be restored as soon as
-        // the call becomes active, without waiting for the call to end.
+    /** Save the app that was active before the dialer/call UI takes over. */
+    fun rememberReturnApp(context: Context) {
         val prefs = context.getSharedPreferences(AUTOMATION_PREFS, Context.MODE_PRIVATE)
         val previousApp = prefs.getString(KEY_LAST_FOREGROUND_PACKAGE, null)
         if (!previousApp.isNullOrBlank() && previousApp != context.packageName) {
             prefs.edit().putString(KEY_CALL_RETURN_PACKAGE, previousApp).apply()
+            Log.i("AssistantBridge", "Saved call return destination: $previousApp")
         }
+    }
+
+    fun dial(context: Context, number: String) {
+        // Save the current app before opening the Bluetooth dialer.
+        rememberReturnApp(context)
         val uri = Uri.fromParts("tel", number, null)
         // ACTION_CALL starts the call immediately on this TS10; use ACTION_DIAL so the user must press Call.
         val bluetoothIntent = Intent(Intent.ACTION_DIAL, uri).apply {
