@@ -189,8 +189,10 @@ class WebChatActivity : Activity() {
             loadWithOverviewMode = true
         }
         desktopButton.text = "Mobile view"
-        pageStatus.text = "Switching to desktop Chat…"
-        webView.reload()
+        pageStatus.text = "Opening Google Chat in desktop mode…"
+        // Always navigate back to the Chat URL: the mobile site may have redirected
+        // to the Play Store/download page before the desktop user-agent was applied.
+        webView.loadUrl(CHAT_URL)
     }
 
     private fun openInBrowser() {
