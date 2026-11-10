@@ -2,10 +2,12 @@ package com.example.gchatcompanion
 
 import android.Manifest
 import android.app.Activity
+import android.app.DownloadManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Environment
 import android.os.Bundle
 import android.view.View
 import android.webkit.PermissionRequest
@@ -13,7 +15,10 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.DownloadListener
+import android.webkit.URLUtil
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ProgressBar
@@ -35,6 +40,9 @@ class WebChatActivity : Activity() {
     private var sawGoogleSignIn = false
     private var switchingToDesktop = false
     private var pendingAudioRequest: PermissionRequest? = null
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private lateinit var rootFrame: FrameLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +50,7 @@ class WebChatActivity : Activity() {
         desktopMode = savedInstanceState?.getBoolean(STATE_DESKTOP_MODE, false) ?: false
         sawGoogleSignIn = savedInstanceState?.getBoolean(STATE_SAW_SIGN_IN, false) ?: false
 
+        rootFrame = FrameLayout(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -70,6 +79,9 @@ class WebChatActivity : Activity() {
         }
         root.addView(pageStatus)
 
+        rootFrame.addView(root, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        setContentView(rootFrame)
+
         webView = WebView(this)
         defaultUserAgent = webView.settings.userAgentString
         webView.settings.apply {
@@ -82,6 +94,7 @@ class WebChatActivity : Activity() {
             allowFileAccess = false
             allowContentAccess = true
             safeBrowsingEnabled = true
+            mediaPlaybackRequiresUserGesture = true
             if (desktopMode) userAgentString = DESKTOP_USER_AGENT
             useWideViewPort = desktopMode
             loadWithOverviewMode = desktopMode
@@ -98,6 +111,28 @@ class WebChatActivity : Activity() {
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 pageStatus.text = title ?: "Google Chat"
+            }
+
+            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                if (fullscreenView != null) {
+                    callback.onCustomViewHidden()
+                    return
+                }
+                fullscreenView = view
+                fullscreenCallback = callback
+                root.visibility = View.GONE
+                rootFrame.addView(view, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+                ))
+            }
+
+            override fun onHideCustomView() {
+                val view = fullscreenView ?: return
+                rootFrame.removeView(view)
+                fullscreenView = null
+                fullscreenCallback?.onCustomViewHidden()
+                fullscreenCallback = null
+                root.visibility = View.VISIBLE
             }
 
             override fun onPermissionRequest(request: PermissionRequest) {
@@ -121,6 +156,9 @@ class WebChatActivity : Activity() {
                 if (pendingAudioRequest == request) pendingAudioRequest = null
             }
         }
+        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            downloadAttachment(url, userAgent, contentDisposition, mimeType)
+        })
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 progress.visibility = View.VISIBLE
@@ -164,8 +202,6 @@ class WebChatActivity : Activity() {
         root.addView(webView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
-        setContentView(root)
-
         if (savedInstanceState == null) webView.loadUrl(CHAT_URL)
         else webView.restoreState(savedInstanceState)
     }
@@ -253,6 +289,40 @@ class WebChatActivity : Activity() {
         }
     }
 
+
+    private fun downloadAttachment(
+        url: String,
+        userAgent: String?,
+        contentDisposition: String?,
+        mimeType: String?
+    ) {
+        val uri = runCatching { Uri.parse(url) }.getOrNull()
+        if (uri == null || uri.scheme != "https") {
+            Toast.makeText(this, "Only secure HTTPS downloads are supported.", Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            val filename = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val request = DownloadManager.Request(uri).apply {
+                setTitle(filename)
+                setDescription("Downloading attachment from Google Chat")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                setAllowedOverMetered(true)
+                setAllowedOverRoaming(false)
+                val cookies = android.webkit.CookieManager.getInstance().getCookie(url)
+                if (!cookies.isNullOrBlank()) addRequestHeader("Cookie", cookies)
+                addRequestHeader("User-Agent", userAgent?.takeIf { it.isNotBlank() } ?: webView.settings.userAgentString)
+                addRequestHeader("Referer", webView.url ?: CHAT_URL)
+            }
+            val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            manager.enqueue(request)
+            Toast.makeText(this, "Download started: $filename", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Couldn't start download: ${e.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun openInBrowser() {
         try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(CHAT_URL))) }
         catch (_: Exception) {
@@ -275,6 +345,10 @@ class WebChatActivity : Activity() {
     override fun onDestroy() {
         pendingAudioRequest?.deny()
         pendingAudioRequest = null
+        fullscreenView?.let { rootFrame.removeView(it) }
+        fullscreenView = null
+        fullscreenCallback?.onCustomViewHidden()
+        fullscreenCallback = null
         if (::webView.isInitialized) {
             webView.stopLoading()
             webView.destroy()
