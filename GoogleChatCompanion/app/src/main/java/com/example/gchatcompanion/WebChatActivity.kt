@@ -63,7 +63,7 @@ class WebChatActivity : Activity() {
         toolbar.addView(compactButton("↻", "Refresh") { webView.reload() })
         layoutButton = compactButton("▣", "Screen layout") { showLayoutMenu(layoutButton) }
         toolbar.addView(layoutButton)
-        toolbar.addView(compactButton("⋮", "More options") { showMoreMenu(it) })
+        toolbar.addView(compactButton("⋮", "More options") { showMoreMenu(toolbar.getChildAt(3)) })
         root.addView(toolbar, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(38)
         ))
