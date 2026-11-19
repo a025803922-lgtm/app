@@ -1,0 +1,31 @@
+name: Wheel Mic Helper build
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'wheel-mic-helper/**'
+      - '.github/workflows/wheel-mic-helper.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.6'
+      - run: gradle -p wheel-mic-helper assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WheelMicHelper-debug-apk
+          path: wheel-mic-helper/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
