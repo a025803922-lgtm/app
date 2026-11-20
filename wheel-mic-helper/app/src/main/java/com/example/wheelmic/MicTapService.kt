@@ -16,12 +16,11 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
-import kotlin.math.max
-import kotlin.math.min
 
 class MicTapService : AccessibilityService() {
     companion object {
         const val ACTION_TAP_MIC = "com.example.wheelmic.ACTION_TAP_MIC"
+        private const val MIC_LABEL = "assistant microphone"
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -29,11 +28,7 @@ class MicTapService : AccessibilityService() {
     private var attempts = 0
     private var clickInProgress = false
 
-    private data class Candidate(
-        val node: AccessibilityNodeInfo,
-        val bounds: Rect,
-        val area: Int
-    )
+    private data class Candidate(val node: AccessibilityNodeInfo, val bounds: Rect)
 
     private val requestReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -62,22 +57,21 @@ class MicTapService : AccessibilityService() {
 
     private fun tryTapFloatingMic() {
         if (!tapRequested || clickInProgress) return
-        if (attempts >= 12) {
+        if (attempts >= 20) {
             tapRequested = false
             return
         }
         attempts++
 
-        // A movable floating control is normally exposed in a system window,
-        // separate from the Assistant app's own content window.
+        // The assistant's own overlay exposes this exact accessible label.
         val candidate = windows
             .asSequence()
             .filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
             .flatMap { window ->
                 val root = window.root
-                if (root == null) emptySequence() else findSmallUnlabelledClickTargets(root).asSequence()
+                if (root == null) emptySequence() else findMicNodes(root).asSequence()
             }
-            .minByOrNull { it.area }
+            .firstOrNull()
             ?: return
 
         clickInProgress = true
@@ -99,30 +93,21 @@ class MicTapService : AccessibilityService() {
         }, 100L)
     }
 
-    private fun findSmallUnlabelledClickTargets(root: AccessibilityNodeInfo): List<Candidate> {
+    private fun findMicNodes(root: AccessibilityNodeInfo): List<Candidate> {
         val found = mutableListOf<Candidate>()
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.add(root)
-
         while (stack.isNotEmpty()) {
             val node = stack.removeLast()
+            val description = node.contentDescription?.toString()?.trim()?.lowercase().orEmpty()
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
-            val width = bounds.width()
-            val height = bounds.height()
-            val ratio = if (height == 0) 0f else width.toFloat() / height.toFloat()
-            val sizeLooksLikeFloatingIcon =
-                width in 28..240 && height in 28..240 && ratio in 0.65f..1.55f
-            val hasNoLabel = node.text.isNullOrBlank() && node.contentDescription.isNullOrBlank()
-            if (node.isVisibleToUser && node.isEnabled && node.isClickable &&
-                sizeLooksLikeFloatingIcon && hasNoLabel
+            if (description == MIC_LABEL && node.isVisibleToUser && node.isEnabled &&
+                !bounds.isEmpty && bounds.width() <= 300 && bounds.height() <= 300
             ) {
-                found += Candidate(node, bounds, max(1, width * height))
+                found += Candidate(node, bounds)
             }
-
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let(stack::add)
-            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let(stack::add)
         }
         return found
     }
