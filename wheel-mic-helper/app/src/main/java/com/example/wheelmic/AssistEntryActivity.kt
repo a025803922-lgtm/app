@@ -14,7 +14,7 @@ class AssistEntryActivity : Activity() {
         if (!isMicAccessibilityEnabled()) {
             Toast.makeText(
                 this,
-                "Enable Wheel Mic Helper in Accessibility settings once, then press the steering-wheel button again.",
+                "Enable Wheel Mic Helper in Accessibility settings once.",
                 Toast.LENGTH_LONG
             ).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -22,13 +22,9 @@ class AssistEntryActivity : Activity() {
             return
         }
 
-        val launch = packageManager.getLaunchIntentForPackage("com.offline.assistant")
-        if (launch == null) {
-            Toast.makeText(this, "OfflineAssistant is not installed.", Toast.LENGTH_LONG).show()
-        } else {
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            startActivity(launch)
-        }
+        // Do not launch the assistant. Its screen is already open.
+        // Ask the enabled accessibility service to tap its visible microphone once.
+        sendBroadcast(Intent(MicTapService.ACTION_TAP_MIC).setPackage(packageName))
         finish()
     }
 
@@ -37,13 +33,8 @@ class AssistEntryActivity : Activity() {
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ).orEmpty()
-
         val component = ComponentName(this, MicTapService::class.java)
-        val acceptedNames = setOf(
-            component.flattenToString(),
-            component.flattenToShortString()
-        )
-
-        return enabledServices.split(':').any { it in acceptedNames }
+        val acceptedNames = setOf(component.flattenToString(), component.flattenToShortString())
+        return enabledServices.split(':').any { it.equals(component.flattenToString(), true) || it.equals(component.flattenToShortString(), true) }
     }
 }
