@@ -28,7 +28,7 @@ class MicTapService : AccessibilityService() {
     private var attempts = 0
     private var clickInProgress = false
 
-    private data class Candidate(val node: AccessibilityNodeInfo, val bounds: Rect)
+    private data class Candidate(val bounds: Rect)
 
     private val requestReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -63,37 +63,53 @@ class MicTapService : AccessibilityService() {
         }
         attempts++
 
-        // The assistant's own overlay exposes this exact accessible label.
-        val candidate = windows
-            .asSequence()
+        // Ignore the assistant activity/PiP. Only inspect the system overlay
+        // and require the assistant's explicit floating-mic accessibility label.
+        val candidate = windows.asSequence()
             .filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
             .flatMap { window ->
                 val root = window.root
-                if (root == null) emptySequence() else findMicNodes(root).asSequence()
+                if (root == null) emptySequence() else findMicBounds(root).asSequence()
             }
             .firstOrNull()
-            ?: return
+        if (candidate == null) {
+            handler.postDelayed({ tryTapFloatingMic() }, 120L)
+            return
+        }
 
         clickInProgress = true
         val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
         tone.startTone(ToneGenerator.TONE_PROP_BEEP, 70)
         handler.postDelayed({
-            val clicked = candidate.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            if (!clicked) {
-                val b = candidate.bounds
-                val path = Path().apply { moveTo(b.exactCenterX(), b.exactCenterY()) }
-                val gesture = GestureDescription.Builder()
-                    .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
-                    .build()
-                dispatchGesture(gesture, null, null)
+            // The overlay handles a physical touch sequence in OnTouchListener;
+            // dispatch a short tap at the center of the labelled mic bounds.
+            val b = candidate.bounds
+            val path = Path().apply { moveTo(b.exactCenterX(), b.exactCenterY()) }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
+                .build()
+            val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    tapRequested = false
+                    clickInProgress = false
+                    tone.release()
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    clickInProgress = false
+                    tone.release()
+                    handler.postDelayed({ tryTapFloatingMic() }, 150L)
+                }
+            }, handler)
+            if (!dispatched) {
+                clickInProgress = false
+                tone.release()
+                handler.postDelayed({ tryTapFloatingMic() }, 150L)
             }
-            tone.release()
-            tapRequested = false
-            clickInProgress = false
         }, 100L)
     }
 
-    private fun findMicNodes(root: AccessibilityNodeInfo): List<Candidate> {
+    private fun findMicBounds(root: AccessibilityNodeInfo): List<Candidate> {
         val found = mutableListOf<Candidate>()
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.add(root)
@@ -105,7 +121,7 @@ class MicTapService : AccessibilityService() {
             if (description == MIC_LABEL && node.isVisibleToUser && node.isEnabled &&
                 !bounds.isEmpty && bounds.width() <= 300 && bounds.height() <= 300
             ) {
-                found += Candidate(node, bounds)
+                found += Candidate(bounds)
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let(stack::add)
         }
