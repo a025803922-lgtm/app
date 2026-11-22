@@ -63,10 +63,10 @@ class MicTapService : AccessibilityService() {
         }
         attempts++
 
-        // Ignore the assistant activity/PiP. Only inspect the system overlay
-        // and require the assistant's explicit floating-mic accessibility label.
+        // Search every accessible window type because head-unit Android builds
+        // may expose application overlays as SYSTEM, APPLICATION, or accessibility
+        // windows. The exact assistant label keeps PiP and unrelated controls out.
         val candidate = windows.asSequence()
-            .filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM }
             .flatMap { window ->
                 val root = window.root
                 if (root == null) emptySequence() else findMicBounds(root).asSequence()
