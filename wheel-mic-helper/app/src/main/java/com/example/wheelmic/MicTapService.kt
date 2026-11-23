@@ -13,7 +13,6 @@ import android.media.ToneGenerator
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -21,21 +20,18 @@ class MicTapService : AccessibilityService() {
     companion object {
         const val ACTION_TAP_MIC = "com.example.wheelmic.ACTION_TAP_MIC"
         private const val MIC_LABEL = "assistant microphone"
-        private const val TAG = "WheelMic"
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private var tapRequested = false
     private var attempts = 0
     private var clickInProgress = false
-    private fun log(message: String) = Log.i(TAG, message)
 
     private data class Candidate(val bounds: Rect)
 
     private val requestReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_TAP_MIC) return
-            log("Received mic tap request")
             tapRequested = true
             attempts = 0
             clickInProgress = false
@@ -45,7 +41,6 @@ class MicTapService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        log("Accessibility service connected")
         val filter = IntentFilter(ACTION_TAP_MIC)
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(requestReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -62,29 +57,24 @@ class MicTapService : AccessibilityService() {
     private fun tryTapFloatingMic() {
         if (!tapRequested || clickInProgress) return
         if (attempts >= 20) {
-            log("No microphone found after $attempts attempts")
             tapRequested = false
             return
         }
         attempts++
-        val windows = windows
-        if (attempts == 1) log("Attempting mic tap; accessible windows=${windows.size}")
-        val candidates = windows.asSequence().flatMap { window ->
-            val root = window.root
-            if (attempts == 1) log("Window type=${window.type}, active=${window.isActive}, focused=${window.isFocused}, root=${root != null}")
-            if (root == null) emptySequence() else findMicBounds(root).asSequence()
-        }.toList()
-        val candidate = candidates.firstOrNull()
+
+        // Read the mic's current bounds from the assistant overlay each time.
+        val candidate = windows.asSequence()
+            .flatMap { window ->
+                val root = window.root
+                if (root == null) emptySequence() else findMicBounds(root).asSequence()
+            }
+            .firstOrNull()
         if (candidate == null) {
-            if (attempts == 1) log("No accessible view labeled '$MIC_LABEL'; retrying")
             handler.postDelayed({ tryTapFloatingMic() }, 120L)
             return
         }
 
-        log("Found mic at ${candidate.bounds}; dispatching tap")
         clickInProgress = true
-        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
-        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 70)
         handler.postDelayed({
             val b = candidate.bounds
             val path = Path().apply { moveTo(b.exactCenterX(), b.exactCenterY()) }
@@ -93,26 +83,27 @@ class MicTapService : AccessibilityService() {
                 .build()
             val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                    log("Mic tap gesture completed")
                     tapRequested = false
                     clickInProgress = false
-                    tone.release()
+                    playListeningBeep()
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    log("Mic tap gesture cancelled")
                     clickInProgress = false
-                    tone.release()
                     handler.postDelayed({ tryTapFloatingMic() }, 150L)
                 }
             }, handler)
             if (!dispatched) {
-                log("Mic tap gesture rejected")
                 clickInProgress = false
-                tone.release()
                 handler.postDelayed({ tryTapFloatingMic() }, 150L)
             }
         }, 100L)
+    }
+
+    private fun playListeningBeep() {
+        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
+        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+        handler.postDelayed({ tone.release() }, 250L)
     }
 
     private fun findMicBounds(root: AccessibilityNodeInfo): List<Candidate> {
@@ -124,9 +115,6 @@ class MicTapService : AccessibilityService() {
             val description = node.contentDescription?.toString()?.trim()?.lowercase().orEmpty()
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
-            if (description.contains("assistant") || description.contains("speak") || description.contains("microphone") || description == "mic") {
-                log("View label='$description', visible=${node.isVisibleToUser}, enabled=${node.isEnabled}, bounds=$bounds, package=${node.packageName}")
-            }
             if (description == MIC_LABEL && node.isVisibleToUser && node.isEnabled &&
                 !bounds.isEmpty && bounds.width() <= 300 && bounds.height() <= 300
             ) {
