@@ -36,7 +36,7 @@ class MicTapService : AccessibilityService() {
     private var clickInProgress = false
     private fun log(message: String) = Log.i(TAG, message)
 
-    private data class Candidate(val bounds: Rect, val windowType: Int)
+    private data class Candidate(val bounds: Rect, val windowType: Int, val node: AccessibilityNodeInfo)
 
     private val requestReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -78,7 +78,10 @@ class MicTapService : AccessibilityService() {
         val candidates = systemWindows.asSequence().flatMap { window ->
             val root = window.root
             if (root == null) emptySequence()
-            else findMicBounds(root).asSequence().map { Candidate(it, window.type) }
+            else findMicNodes(root).asSequence().map { node ->
+                val bounds = Rect().also(node::getBoundsInScreen)
+                Candidate(bounds, window.type, AccessibilityNodeInfo.obtain(node))
+            }
         }.toList()
         val candidate = candidates.minByOrNull { it.bounds.width().toLong() * it.bounds.height() }
         if (candidate == null) {
@@ -87,34 +90,48 @@ class MicTapService : AccessibilityService() {
             return
         }
 
-        log("Targeting assistant overlay mic at ${candidate.bounds}, windowType=${candidate.windowType}")
+        log("Targeting assistant overlay mic at ${candidate.bounds}, windowType=${candidate.windowType}, clickable=${candidate.node.isClickable}")
         clickInProgress = true
         handler.postDelayed({
-            val b = candidate.bounds
-            val path = Path().apply { moveTo(b.exactCenterX(), b.exactCenterY()) }
-            val gesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
-                .build()
-            val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
-                    log("Assistant mic tap completed; playing Waze-style listening cue")
-                    tapRequested = false
-                    clickInProgress = false
-                    playListeningBeep()
-                }
+            val clicked = candidate.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            log("Assistant mic ACTION_CLICK returned $clicked")
+            if (clicked) {
+                completeMicTap()
+            } else {
+                // Only inject a coordinate gesture when the node does not expose
+                // an accessibility click action. Direct clicks avoid touching
+                // controls underneath the floating assistant window.
+                val b = candidate.bounds
+                val path = Path().apply { moveTo(b.exactCenterX(), b.exactCenterY()) }
+                val gesture = GestureDescription.Builder()
+                    .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
+                    .build()
+                val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        log("Assistant mic tap completed via gesture; playing Waze-style listening cue")
+                        completeMicTap()
+                    }
 
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    log("Assistant mic tap was cancelled")
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        log("Assistant mic tap was cancelled")
+                        clickInProgress = false
+                        handler.postDelayed({ tryTapFloatingMic() }, 150L)
+                    }
+                }, handler)
+                log("dispatchGesture returned $dispatched")
+                if (!dispatched) {
                     clickInProgress = false
                     handler.postDelayed({ tryTapFloatingMic() }, 150L)
                 }
-            }, handler)
-            log("dispatchGesture returned $dispatched")
-            if (!dispatched) {
-                clickInProgress = false
-                handler.postDelayed({ tryTapFloatingMic() }, 150L)
             }
         }, 100L)
+    }
+
+    private fun completeMicTap() {
+        log("Assistant mic activation completed; playing Waze-style listening cue")
+        tapRequested = false
+        clickInProgress = false
+        playListeningBeep()
     }
 
     private fun playListeningBeep() {
@@ -155,8 +172,8 @@ class MicTapService : AccessibilityService() {
         }
     }
 
-    private fun findMicBounds(root: AccessibilityNodeInfo): List<Rect> {
-        val found = mutableListOf<Rect>()
+    private fun findMicNodes(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
+        val found = mutableListOf<AccessibilityNodeInfo>()
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.add(root)
         while (stack.isNotEmpty()) {
@@ -168,8 +185,8 @@ class MicTapService : AccessibilityService() {
                 node.isVisibleToUser && node.isEnabled && !bounds.isEmpty &&
                 bounds.width() <= 100 && bounds.height() <= 100
             ) {
-                log("Eligible mic node at $bounds in $ASSISTANT_PACKAGE")
-                found += bounds
+                log("Eligible mic node at $bounds in $ASSISTANT_PACKAGE; clickable=${node.isClickable}")
+                found += node
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let(stack::add)
         }
