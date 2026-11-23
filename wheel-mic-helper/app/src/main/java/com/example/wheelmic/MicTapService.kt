@@ -8,15 +8,19 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Path
 import android.graphics.Rect
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.ToneGenerator
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import java.io.File
 
 class MicTapService : AccessibilityService() {
     companion object {
@@ -93,7 +97,7 @@ class MicTapService : AccessibilityService() {
                 .build()
             val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                    log("Assistant mic tap completed; playing listening beep")
+                    log("Assistant mic tap completed; playing Waze-style listening cue")
                     tapRequested = false
                     clickInProgress = false
                     playListeningBeep()
@@ -114,9 +118,41 @@ class MicTapService : AccessibilityService() {
     }
 
     private fun playListeningBeep() {
-        val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
-        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
-        handler.postDelayed({ tone.release() }, 250L)
+        var player: MediaPlayer? = null
+        var toneFile: File? = null
+        try {
+            val encoded = assets.open("google_open.wav.b64").bufferedReader().use { it.readText() }
+            toneFile = File(cacheDir, "voice_search_open.wav").apply {
+                writeBytes(Base64.decode(encoded, Base64.DEFAULT))
+            }
+            player = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(toneFile.absolutePath)
+                setOnCompletionListener {
+                    it.release()
+                    toneFile.delete()
+                }
+                setOnErrorListener { mediaPlayer, _, _ ->
+                    mediaPlayer.release()
+                    toneFile.delete()
+                    true
+                }
+                prepare()
+                start()
+            }
+        } catch (error: Exception) {
+            log("Waze cue playback failed; using short system beep: ${error.message}")
+            try { player?.release() } catch (_: IllegalStateException) {}
+            toneFile?.delete()
+            val fallback = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
+            fallback.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+            handler.postDelayed({ fallback.release() }, 250L)
+        }
     }
 
     private fun findMicBounds(root: AccessibilityNodeInfo): List<Rect> {
