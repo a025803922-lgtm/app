@@ -35,6 +35,10 @@ class AssistEntryActivity : Activity() {
         ).orEmpty()
         val component = ComponentName(this, MicTapService::class.java)
         val acceptedNames = setOf(component.flattenToString(), component.flattenToShortString())
-        return enabledServices.split(':').any { it.equals(component.flattenToString(), true) || it.equals(component.flattenToShortString(), true) }
+        return enabledServices.split(':').any { enabled ->
+            acceptedNames.any { accepted ->
+                enabled.trim().equals(accepted, ignoreCase = true)
+            }
+        }
     }
 }
