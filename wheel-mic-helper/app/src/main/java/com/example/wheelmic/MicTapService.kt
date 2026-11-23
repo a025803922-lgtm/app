@@ -122,29 +122,29 @@ class MicTapService : AccessibilityService() {
         var toneFile: File? = null
         try {
             val encoded = assets.open("google_open.wav.b64").bufferedReader().use { it.readText() }
-            toneFile = File(cacheDir, "voice_search_open.wav").apply {
-                writeBytes(Base64.decode(encoded, Base64.DEFAULT))
+            val audioFile = File(cacheDir, "voice_search_open.wav")
+            toneFile = audioFile
+            audioFile.writeBytes(Base64.decode(encoded, Base64.DEFAULT))
+            val mediaPlayer = MediaPlayer()
+            player = mediaPlayer
+            mediaPlayer.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            mediaPlayer.setDataSource(audioFile.absolutePath)
+            mediaPlayer.setOnCompletionListener {
+                it.release()
+                audioFile.delete()
             }
-            player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                setDataSource(toneFile.absolutePath)
-                setOnCompletionListener {
-                    it.release()
-                    toneFile.delete()
-                }
-                setOnErrorListener { mediaPlayer, _, _ ->
-                    mediaPlayer.release()
-                    toneFile.delete()
-                    true
-                }
-                prepare()
-                start()
+            mediaPlayer.setOnErrorListener { mp, _, _ ->
+                mp.release()
+                audioFile.delete()
+                true
             }
+            mediaPlayer.prepare()
+            mediaPlayer.start()
         } catch (error: Exception) {
             log("Waze cue playback failed; using short system beep: ${error.message}")
             try { player?.release() } catch (_: IllegalStateException) {}
