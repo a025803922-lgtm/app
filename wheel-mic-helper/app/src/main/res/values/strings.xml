@@ -1,13 +1,12 @@
 <resources>
     <string name="app_name">Wheel Mic Helper</string>
-    <string name="accessibility_desc">Activates Offline Assistant's microphone when the steering-wheel assistant button is pressed.</string>
+    <string name="accessibility_desc">Activates the Offline Assistant microphone when the steering-wheel assistant button is pressed.</string>
     <string name="settings_title">Wheel Mic Helper settings</string>
     <string name="setup_heading">Accessibility setup</string>
-    <string name="setup_description">Enable Wheel Mic Helper in Android Accessibility settings so the steering-wheel assistant button can activate Offline Assistant's microphone.</string>
+    <string name="setup_description">Enable Wheel Mic Helper in Android Accessibility settings so the steering-wheel assistant button can activate the Offline Assistant microphone.</string>
     <string name="restore_after_restart">Restore accessibility after restart</string>
     <string name="recovery_ready">Restart recovery is ready. The helper restores only its own Accessibility service and leaves other enabled services unchanged.</string>
-    <string name="secure_settings_grant">Optional recovery permission. If this HU forgets Accessibility after restart, run once from a computer with ADB:
-adb shell pm grant com.example.wheelmic android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="secure_settings_grant">Optional recovery permission. If this HU forgets Accessibility after restart, run once from a computer with ADB:&#10;adb shell pm grant com.example.wheelmic android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="accessibility_enabled">Wheel Mic Helper is enabled.</string>
     <string name="accessibility_disabled">Wheel Mic Helper is off. Turn it on in Android Accessibility settings.</string>
     <string name="toast_adb_grant">Grant the optional recovery permission once with ADB, then turn this option on.</string>
