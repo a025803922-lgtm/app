@@ -18,10 +18,11 @@ import android.widget.Toast
 class RestoreSettingsActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var restoreCheckBox: CheckBox
+    private lateinit var recoveryHelp: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "Wheel Mic Helper"
+        title = getString(R.string.settings_title)
 
         val padding = (24 * resources.displayMetrics.density).toInt()
         val content = LinearLayout(this).apply {
@@ -34,11 +35,11 @@ class RestoreSettingsActivity : Activity() {
         setContentView(scroll)
 
         content.addView(TextView(this).apply {
-            text = "Accessibility setup"
+            text = getString(R.string.setup_heading)
             textSize = 22f
         })
         content.addView(TextView(this).apply {
-            text = "Enable Wheel Mic Helper in Android Accessibility settings so the steering-wheel button can tap Offline Assistant’s microphone."
+            text = getString(R.string.setup_description)
             textSize = 16f
             setPadding(0, padding / 2, 0, padding / 2)
         })
@@ -47,14 +48,14 @@ class RestoreSettingsActivity : Activity() {
         content.addView(status)
 
         restoreCheckBox = CheckBox(this).apply {
-            text = "Restore accessibility after restart"
+            text = getString(R.string.restore_after_restart)
             textSize = 16f
             setOnCheckedChangeListener { _, checked ->
                 if (checked && !hasSecureSettingsPermission()) {
                     isChecked = false
                     Toast.makeText(
                         this@RestoreSettingsActivity,
-                        "Grant WRITE_SECURE_SETTINGS once with ADB, then enable this option.",
+                        getString(R.string.toast_adb_grant),
                         Toast.LENGTH_LONG
                     ).show()
                 } else {
@@ -67,18 +68,14 @@ class RestoreSettingsActivity : Activity() {
         }
         content.addView(restoreCheckBox)
 
-        content.addView(TextView(this).apply {
-            text = if (hasSecureSettingsPermission()) {
-                "Restart recovery is ready. The helper only restores its own accessibility service and keeps other enabled services unchanged."
-            } else {
-                "One-time ADB grant required:\nadb shell pm grant com.example.wheelmic android.permission.WRITE_SECURE_SETTINGS"
-            }
+        recoveryHelp = TextView(this).apply {
             textSize = 14f
             setPadding(0, 0, 0, padding / 2)
-        })
+        }
+        content.addView(recoveryHelp)
 
         content.addView(Button(this).apply {
-            text = "Open Accessibility settings"
+            text = getString(R.string.open_accessibility_settings)
             setOnClickListener {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
@@ -94,9 +91,15 @@ class RestoreSettingsActivity : Activity() {
         val enabled = isMicAccessibilityEnabled()
         val canRestore = hasSecureSettingsPermission()
         status.text = if (enabled) {
-            "Wheel Mic Helper is enabled."
+            getString(R.string.accessibility_enabled)
         } else {
-            "Wheel Mic Helper is currently disabled. Turn it on in Accessibility settings."
+            getString(R.string.accessibility_disabled)
+        }
+
+        recoveryHelp.text = if (canRestore) {
+            getString(R.string.recovery_ready)
+        } else {
+            getString(R.string.secure_settings_grant)
         }
 
         val preferences = getSharedPreferences(RestorePrefs.PREFS_NAME, MODE_PRIVATE)
@@ -106,7 +109,11 @@ class RestoreSettingsActivity : Activity() {
         restoreCheckBox.setOnCheckedChangeListener { _, checked ->
             if (checked && !hasSecureSettingsPermission()) {
                 restoreCheckBox.isChecked = false
-                Toast.makeText(this, "WRITE_SECURE_SETTINGS permission is required.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_permission_required),
+                    Toast.LENGTH_LONG
+                ).show()
             } else {
                 preferences.edit().putBoolean(RestorePrefs.KEY_RESTORE_AFTER_RESTART, checked).apply()
             }
