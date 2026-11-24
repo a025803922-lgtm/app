@@ -14,7 +14,7 @@ class AssistEntryActivity : Activity() {
         if (!isMicAccessibilityEnabled()) {
             Toast.makeText(
                 this,
-                "Enable Wheel Mic Helper in Accessibility settings once.",
+                getString(R.string.enable_accessibility_first),
                 Toast.LENGTH_LONG
             ).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
