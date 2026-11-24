@@ -5,4 +5,5 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_desc"
+    android:settingsActivity="com.example.wheelmic.RestoreSettingsActivity"
     android:notificationTimeout="100" />
