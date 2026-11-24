@@ -52,6 +52,12 @@ class MicTapService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         log("Accessibility service connected; gesture capability active")
+        val restorePrefs = getSharedPreferences(RestorePrefs.PREFS_NAME, MODE_PRIVATE)
+        if (!restorePrefs.contains(RestorePrefs.KEY_RESTORE_AFTER_RESTART)) {
+            // Enabling this AccessibilityService in Android settings is the user's
+            // opt-in to restore this same service after a head-unit restart.
+            restorePrefs.edit().putBoolean(RestorePrefs.KEY_RESTORE_AFTER_RESTART, true).apply()
+        }
         val filter = IntentFilter(ACTION_TAP_MIC)
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(requestReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
