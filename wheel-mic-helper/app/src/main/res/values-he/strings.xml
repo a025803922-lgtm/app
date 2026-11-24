@@ -6,8 +6,7 @@
     <string name="setup_description">יש להפעיל את ״מיקרופון מההגה״ בהגדרות הנגישות של Android, כדי שכפתור העוזר שבהגה יפעיל את המיקרופון של Offline Assistant.</string>
     <string name="restore_after_restart">שחזור הנגישות לאחר הפעלה מחדש</string>
     <string name="recovery_ready">שחזור ההרשאה מוכן. האפליקציה תשחזר רק את שירות הנגישות שלה ותשאיר שירותים אחרים פעילים.</string>
-    <string name="secure_settings_grant">הרשאת שחזור אופציונלית. אם מערכת המולטימדיה מכבה את הנגישות לאחר הפעלה מחדש, יש להריץ פעם אחת במחשב עם ADB:
-adb shell pm grant com.example.wheelmic android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="secure_settings_grant">הרשאת שחזור אופציונלית. אם מערכת המולטימדיה מכבה את הנגישות לאחר הפעלה מחדש, יש להריץ פעם אחת במחשב עם ADB:&#10;adb shell pm grant com.example.wheelmic android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="accessibility_enabled">שירות ״מיקרופון מההגה״ מופעל.</string>
     <string name="accessibility_disabled">שירות ״מיקרופון מההגה״ כבוי. יש להפעיל אותו בהגדרות הנגישות.</string>
     <string name="toast_adb_grant">כדי להפעיל שחזור לאחר הפעלה מחדש, יש לאשר את ההרשאה האופציונלית באמצעות ADB.</string>
