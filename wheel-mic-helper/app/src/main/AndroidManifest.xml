@@ -43,6 +43,9 @@
                 <action android:name="com.ts.intent.action.ACC_ON" />
                 <action android:name="android.intent.action.ACC_ON" />
                 <action android:name="com.microntek.bootcheck" />
+                <action android:name="com.glsx.boot.ACCON" />
+                <action android:name="com.android.action.ACC_ON" />
+                <action android:name="autochips.intent.action.QB_POWERON" />
             </intent-filter>
         </receiver>
 
